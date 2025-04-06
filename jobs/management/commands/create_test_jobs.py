@@ -56,13 +56,17 @@ class Command(BaseCommand):
                 # Prepare Celery task arguments and options
                 task_args = [job.id]
                 task_kwargs = {}
+
+                # Calculate countdown based on priority (higher priority = lower countdown)
+                # Max priority (10) gets 0 seconds, lowest priority (0) gets 10 seconds
+                countdown = max(0, 10 - job.priority)
+
                 celery_options = {
-                    'priority': job.priority,  # This is used by the router to select the queue
+                    'priority': job.priority,  # Keep this for reference
                     'retry_policy': {
                         'max_retries': job.max_retries,
                     },
-                    # Explicitly set the queue based on priority
-                    'queue': f'priority_{job.priority}'
+                    'countdown': countdown  # Add countdown based on priority
                 }
 
                 # Queue the job for immediate processing

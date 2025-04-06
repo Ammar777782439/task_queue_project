@@ -52,13 +52,16 @@ class JobTask(Task):
 
 @shared_task(bind=True, base=JobTask, autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=600, retry_jitter=True)
 def process_job_task(self, job_id):
+    """Processes a job identified by job_id with priority support.
+    Jobs with higher priority will be processed first.
+    """
     """
     Processes a job identified by job_id.
     Updates job status and handles retries.
     """
     # --- FORCE FAILURE FOR TESTING ---
     # Raise error immediately to ensure failure for testing permanent failure logic
-   
+
     # --- END FORCE FAILURE ---
 
     try:

@@ -34,13 +34,17 @@ def create_job_view(request):
                 task_kwargs = {
                     # Pass any other task-specific kwargs needed by process_job_task
                 }
+
+                # Calculate countdown based on priority (higher priority = lower countdown)
+                # Max priority (10) gets 0 seconds, lowest priority (0) gets 10 seconds
+                countdown = max(0, 10 - priority)
+
                 celery_options = {
-                    'priority': priority,  # This is used by the router to select the queue
+                    'priority': priority,  # Keep this for reference
                     'retry_policy': {
                         'max_retries': job.max_retries,
                     },
-                    # Explicitly set the queue based on priority
-                    'queue': f'priority_{priority}'
+                    'countdown': countdown  # Add countdown based on priority
                 }
 
                 # Use 'eta' if scheduled_time is set and in the future

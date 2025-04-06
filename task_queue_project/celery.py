@@ -12,25 +12,21 @@ app = Celery('task_queue_project')
 # the configuration object to child processes.
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
-# Configure worker to consume from queues in priority order
-app.conf.worker_prefetch_multiplier = 1  # Reduce prefetching
+# Simple configuration with a single queue
+app.conf.worker_prefetch_multiplier = 1  # Process one task at a time
+app.conf.worker_disable_rate_limits = True
 
-# Define the priority exchange
-priority_exchange = Exchange('priority', type='direct')
+# Define the default exchange and queue
+default_exchange = Exchange('default', type='direct')
+default_queue = Queue('default', default_exchange, routing_key='default')
 
-# Create queues for each priority level
-priority_queues = [
-    Queue(f'priority_{i}', priority_exchange, routing_key=f'priority_{i}')
-    for i in range(11)  # 0-10 priority levels
-]
-
-# Set task queues in priority order (highest first)
-app.conf.task_queues = tuple(reversed(priority_queues))
+# Set task queues
+app.conf.task_queues = (default_queue,)
 
 # Default settings
-app.conf.task_default_queue = 'priority_0'
-app.conf.task_default_exchange = 'priority'
-app.conf.task_default_routing_key = 'priority_0'
+app.conf.task_default_queue = 'default'
+app.conf.task_default_exchange = 'default'
+app.conf.task_default_routing_key = 'default'
 
 # Load task modules from all registered Django app configs.
 app.autodiscover_tasks()
