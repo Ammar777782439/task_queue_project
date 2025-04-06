@@ -24,6 +24,7 @@ class Job(models.Model):
     error_message = models.TextField(blank=True, null=True, help_text="رسالة الخطأ في حال فشل المهمة.")
     created_at = models.DateTimeField(auto_now_add=True, help_text="وقت إنشاء سجل المهمة.")
     updated_at = models.DateTimeField(auto_now=True, help_text="وقت آخر تحديث لسجل المهمة.")
+    permanently_failed = models.BooleanField(default=False, help_text="يشير إلى ما إذا كانت المهمة قد فشلت نهائيًا بعد كل المحاولات.")
 
     def __str__(self):
         return f"{self.task_name} - {self.status}"

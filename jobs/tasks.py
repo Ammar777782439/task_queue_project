@@ -10,22 +10,29 @@ logger = logging.getLogger(__name__)
 class JobTask(Task):
     """Custom Task class to handle Job status updates."""
 
-    def on_failure(self, exc, task_id, args, kwargs, einfo):
-        """Handle task failure after all retries."""
-        job_id = args[0] if args else None
-        if job_id:
-            try:
-                job = Job.objects.get(pk=job_id)
-                job.status = 'failed'
-                job.error_message = f"Task failed after retries: {einfo}"
-                job.last_attempt_time = timezone.now()
-                job.save(update_fields=['status', 'error_message', 'last_attempt_time'])
-                logger.error(f"Job {job_id} failed permanently: {einfo}")
-                # Implement further failure handling like alerting or dead-letter queue logic here
-            except Job.DoesNotExist:
-                logger.error(f"Job {job_id} not found during final failure handling.")
-            except Exception as e:
-                 logger.error(f"Error during final failure handling for job {job_id}: {e}")
+    # def on_failure(self, exc, task_id, args, kwargs, einfo):
+    #     """Handle task failure after all retries."""
+    #     job_id = args[0] if args else None
+    #     if job_id:
+    #         try:
+    #             job = Job.objects.get(pk=job_id)
+    #             job.status = 'failed'
+    #             job.error_message = f"Task failed after retries: {einfo}"
+    #             job.last_attempt_time = timezone.now()
+    #             job.permanently_failed = True # Set the flag for permanent failure
+    #             job.save(update_fields=['status', 'error_message', 'last_attempt_time', 'permanently_failed']) # Added permanently_failed
+
+    #             # Simulate Alerting / Critical Logging
+    #             logger.critical(f"ALERT: Job {job_id} ({job.task_name}) has failed permanently after all retries and marked as such. Error: {einfo}")
+    #             # In a real system, replace logger.critical with code to send an email,
+    #             # push to a monitoring system (e.g., Sentry), or trigger another alert mechanism.
+
+    #         except Job.DoesNotExist:
+    #             logger.error(f"Job {job_id} not found during final failure handling.")
+    #             # Also log critical here as the job record is missing after failure
+    #             logger.critical(f"ALERT: Job {job_id} record not found during final failure handling. Error: {einfo}")
+    #         except Exception as e:
+    #              logger.error(f"Error during final failure handling for job {job_id}: {e}")
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
         """Handle task retry."""
@@ -49,7 +56,12 @@ def process_job_task(self, job_id):
     Processes a job identified by job_id.
     Updates job status and handles retries.
     """
+    # --- FORCE FAILURE FOR TESTING --- REMOVED ---
+    # raise ValueError(f"FORCED permanent failure test for job {job_id}") # Line removed/commented out
+    # --- END FORCE FAILURE ---
+
     try:
+        # The code below will likely not be reached due to the forced failure above
         job = Job.objects.get(pk=job_id)
         logger.info(f"Starting job {job_id} ({job.task_name})")
 
@@ -65,10 +77,13 @@ def process_job_task(self, job_id):
         print(f"Processing job {job_id}: {job.task_name}...")
         time.sleep(5) # Simulate work
 
-        # Example: Simulate a potential failure for demonstration
-        import random
-        if random.random() < 0.6: # 60% chance of failure
-            raise ValueError(f"Simulated processing error for job {job_id}")
+        # Example: Simulate a potential failure for demonstration (Original code - now commented out)
+        # import random
+        # if random.random() < 0.6: # 60% chance of failure
+        #     raise ValueError(f"Simulated processing error for job {job_id}")
+
+
+
 
         # --- Task Completion ---
         job.status = 'completed'
@@ -85,4 +100,5 @@ def process_job_task(self, job_id):
         logger.error(f"Exception during processing job {job_id}: {exc}")
         # The autoretry_for mechanism will handle retrying based on the exception
         # The on_retry and on_failure methods in JobTask handle status updates
+        raise # Re-raise the exception for Celery to handle retry/failure
         raise # Re-raise the exception for Celery to handle retry/failure
