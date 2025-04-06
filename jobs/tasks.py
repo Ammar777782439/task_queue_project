@@ -56,8 +56,9 @@ def process_job_task(self, job_id):
     Processes a job identified by job_id.
     Updates job status and handles retries.
     """
-    # --- FORCE FAILURE FOR TESTING --- REMOVED ---
-    # raise ValueError(f"FORCED permanent failure test for job {job_id}") # Line removed/commented out
+    # --- FORCE FAILURE FOR TESTING ---
+    # Raise error immediately to ensure failure for testing permanent failure logic
+   
     # --- END FORCE FAILURE ---
 
     try:
@@ -100,5 +101,4 @@ def process_job_task(self, job_id):
         logger.error(f"Exception during processing job {job_id}: {exc}")
         # The autoretry_for mechanism will handle retrying based on the exception
         # The on_retry and on_failure methods in JobTask handle status updates
-        raise # Re-raise the exception for Celery to handle retry/failure
         raise # Re-raise the exception for Celery to handle retry/failure
