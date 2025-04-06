@@ -1,0 +1,16 @@
+# Django Framework
+django>=4.0,<5.0  # Or specify your exact Django version if needed
+
+# Celery Task Queue
+celery>=5.0,<6.0
+redis>=4.0,<5.0  # Redis client library for Celery broker/backend
+
+# PostgreSQL Database Adapter
+psycopg2-binary>=2.9,<3.0
+
+# Optional: For loading environment variables (good practice)
+# python-dotenv>=0.19,<1.0
+
+# Optional: For alternative concurrency pools on Windows (if not using -P solo)
+# gevent>=21.0
+# eventlet>=0.30

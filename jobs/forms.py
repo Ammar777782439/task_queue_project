@@ -12,14 +12,14 @@ class CreateJobForm(forms.Form):
         initial=0,
         required=False,
         label="Priority",
-        help_text="Higher value means higher priority (supported by some brokers)."
+        help_text="القيمة الأعلى تعني أولوية أعلى(supported by some brokers)."
     )
     max_retries = forms.IntegerField(
         initial=3,
         required=False,
         label="Max Retries",
         min_value=0,
-        help_text="Maximum number of times the task will be retried upon failure."
+        help_text="الحد الأقصى لعدد المرات التي سيتم فيها إعادة محاولة المهمة عند الفشل."
     )
     # Add fields for any specific parameters your tasks might need
     # Example:
