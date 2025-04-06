@@ -66,9 +66,9 @@ def process_job_task(self, job_id):
         time.sleep(5) # Simulate work
 
         # Example: Simulate a potential failure for demonstration
-        # import random
-        # if random.random() < 0.6: # 60% chance of failure
-        #     raise ValueError(f"Simulated processing error for job {job_id}")
+        import random
+        if random.random() < 0.6: # 60% chance of failure
+            raise ValueError(f"Simulated processing error for job {job_id}")
 
         # --- Task Completion ---
         job.status = 'completed'

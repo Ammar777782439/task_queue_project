@@ -1,9 +1,10 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from .forms import CreateJobForm
+from .forms import CreateJobForm # We will update this form later to include scheduled_time
 from .models import Job
 from .tasks import process_job_task
 import logging
+from django.utils import timezone # Import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,8 @@ def create_job_view(request):
             task_name = form.cleaned_data['task_name']
             priority = form.cleaned_data['priority']
             max_retries = form.cleaned_data['max_retries']
-            # Get any other task-specific parameters from the form here
+            # Get scheduled_time from the form (we'll add this field to the form next)
+            scheduled_time_input = form.cleaned_data.get('scheduled_time')
 
             try:
                 # Create the Job record in the database
@@ -22,32 +24,51 @@ def create_job_view(request):
                     task_name=task_name,
                     priority=priority,
                     max_retries=max_retries,
-                    status='pending' # Initial status
-                    # Add any other specific parameters to the Job model if needed
+                    status='pending', # Initial status
+                    scheduled_time=scheduled_time_input # Save scheduled time
                 )
                 logger.info(f"Created job {job.id} via web form.")
 
-                # Queue the job using Celery
-                process_job_task.apply_async(
-                    args=[job.id],
-                    priority=priority,
-                    retry_policy={
+                # Prepare Celery task arguments and options
+                task_args = [job.id]
+                task_kwargs = {
+                    # Pass any other task-specific kwargs needed by process_job_task
+                }
+                celery_options = {
+                    'priority': priority,
+                    'retry_policy': {
                         'max_retries': job.max_retries,
                     }
-                    # Pass any other task-specific kwargs needed by process_job_task
-                    # kwargs={'email_address': form.cleaned_data.get('email_address')}
-                )
-                logger.info(f"Queued job {job.id} via web form.")
+                }
 
-                messages.success(request, f'Successfully created and queued job "{task_name}" (ID: {job.id}).')
-                return redirect('create_job') # Redirect back to the same page (or a success page)
+                # Use 'eta' if scheduled_time is set and in the future
+                if job.scheduled_time and job.scheduled_time > timezone.now():
+                    celery_options['eta'] = job.scheduled_time
+                    logger.info(f"Scheduling job {job.id} for {job.scheduled_time}")
+                    success_message = f'Successfully created and scheduled job "{task_name}" (ID: {job.id}) for {job.scheduled_time}.'
+                else:
+                    # If scheduled_time is in the past or not set, queue for immediate processing
+                    if job.scheduled_time:
+                         logger.warning(f"Scheduled time for job {job.id} ({job.scheduled_time}) is in the past. Queuing for immediate processing.")
+                    else:
+                        logger.info(f"Queuing job {job.id} for immediate processing.")
+                    success_message = f'Successfully created and queued job "{task_name}" (ID: {job.id}) for immediate processing.'
+
+
+                # Queue the job using Celery
+                process_job_task.apply_async(
+                    args=task_args,
+                    kwargs=task_kwargs,
+                    **celery_options
+                )
+
+                messages.success(request, success_message)
+                return redirect('create_job') # Redirect back to the same page
 
             except Exception as e:
                 logger.error(f"Error creating/queuing job from web form: {e}")
                 messages.error(request, f'Failed to create or queue job: {e}')
-                # Optionally, render the form again with the error
-                # context = {'form': form}
-                # return render(request, 'jobs/create_job.html', context)
+                # Fall through to render the form again with errors
 
     else: # GET request
         form = CreateJobForm()

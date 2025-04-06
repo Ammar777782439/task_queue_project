@@ -78,7 +78,15 @@ You need to run the following components, preferably in separate terminal window
         # celery -A task_queue_project worker --loglevel=info -P gevent -c 100
         ```
 
-3.  **Start the Django Development Server:**
+3.  **Start Celery Beat (for scheduled tasks):**
+    *   Make sure your virtual environment is activated.
+    *   In a **separate terminal** from the worker:
+        ```bash
+        celery -A task_queue_project beat --loglevel=info
+        ```
+    *   *(Note: This command starts Celery Beat using the default scheduler. It will pick up tasks scheduled with a specific time (`eta`) but does not support managing periodic tasks via the Django admin, which requires installing `django-celery-beat`.)*
+
+4.  **Start the Django Development Server:**
     *   Make sure your virtual environment is activated.
     ```bash
     python manage.py runserver
@@ -91,10 +99,14 @@ You need to run the following components, preferably in separate terminal window
 
 ## Creating Jobs
 
-*   **Via Web Interface:** Navigate to `http://127.0.0.1:8000/jobs/create/`, fill in the form, and click "Create Job".
+*   **Via Web Interface:** Navigate to `http://127.0.0.1:8000/jobs/create/`, fill in the form (optionally set a future "Scheduled Time"), and click "Create Job".
 *   **Via Management Command:**
     ```bash
-    python manage.py create_job "Your Task Name Here" --priority 5 --max_retries 2
+    # Immediate execution
+    python manage.py create_job "Immediate Task" --priority 5 --max_retries 2
+
+    # Scheduled execution (Requires Celery Beat to be running)
+    python manage.py create_job "Scheduled Task" --schedule_at "2025-04-07 10:30:00"
     ```
 
 ## Monitoring

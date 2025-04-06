@@ -19,7 +19,13 @@ class CreateJobForm(forms.Form):
         required=False,
         label="Max Retries",
         min_value=0,
-        help_text="الحد الأقصى لعدد المرات التي سيتم فيها إعادة محاولة المهمة عند الفشل."
+        help_text="Maximum number of times the task will be retried upon failure."
+    )
+    scheduled_time = forms.DateTimeField(
+        required=False,
+        label="Scheduled Time (Optional)",
+        widget=forms.DateTimeInput(attrs={'type': 'datetime-local'}), # Use HTML5 datetime-local input
+        help_text="Schedule the task to run at a specific future time. Requires Celery Beat to be running."
     )
     # Add fields for any specific parameters your tasks might need
     # Example:
