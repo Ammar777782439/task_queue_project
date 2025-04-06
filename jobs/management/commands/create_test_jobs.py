@@ -57,10 +57,12 @@ class Command(BaseCommand):
                 task_args = [job.id]
                 task_kwargs = {}
                 celery_options = {
-                    'priority': job.priority,
+                    'priority': job.priority,  # This is used by the router to select the queue
                     'retry_policy': {
                         'max_retries': job.max_retries,
-                    }
+                    },
+                    # Explicitly set the queue based on priority
+                    'queue': f'priority_{job.priority}'
                 }
 
                 # Queue the job for immediate processing

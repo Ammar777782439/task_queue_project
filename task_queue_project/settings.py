@@ -135,3 +135,32 @@ CELERY_BROKER_URL = 'redis://localhost:16379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_BACKEND = 'redis://localhost:16379/0'
+
+# Priority queue settings using multiple queues
+CELERY_TASK_ROUTES = {
+    'jobs.tasks.process_job_task': [
+        # Route based on the priority in the task options
+        ('priority', lambda p: {
+            'queue': f'priority_{p}' if p is not None else 'priority_0'
+        }),
+    ],
+}
+
+# Define multiple queues with different priorities
+CELERY_TASK_QUEUES = {
+    'priority_10': {'exchange': 'priority', 'routing_key': 'priority_10'},
+    'priority_9': {'exchange': 'priority', 'routing_key': 'priority_9'},
+    'priority_8': {'exchange': 'priority', 'routing_key': 'priority_8'},
+    'priority_7': {'exchange': 'priority', 'routing_key': 'priority_7'},
+    'priority_6': {'exchange': 'priority', 'routing_key': 'priority_6'},
+    'priority_5': {'exchange': 'priority', 'routing_key': 'priority_5'},
+    'priority_4': {'exchange': 'priority', 'routing_key': 'priority_4'},
+    'priority_3': {'exchange': 'priority', 'routing_key': 'priority_3'},
+    'priority_2': {'exchange': 'priority', 'routing_key': 'priority_2'},
+    'priority_1': {'exchange': 'priority', 'routing_key': 'priority_1'},
+    'priority_0': {'exchange': 'priority', 'routing_key': 'priority_0'},
+}
+
+# Additional Celery settings
+CELERY_TASK_CREATE_MISSING_QUEUES = True
+CELERY_TASK_ACKS_LATE = True  # Acknowledge tasks after they are executed, not when they're received

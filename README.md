@@ -64,19 +64,20 @@ You need to run the following components, preferably in separate terminal window
     ```
     *(Note: This exposes Redis on port 16379 as configured in `docker-compose.yml` and `settings.py`)*
 
-2.  **Start the Celery Worker:**
+2.  **Start the Celery Worker with Priority Support:**
     *   Make sure your virtual environment is activated.
-    *   Use the `solo` pool for compatibility on Windows:
+    *   Use the `solo` pool for compatibility on Windows and specify the queue:
         ```bash
-        celery -A task_queue_project worker --loglevel=info -P solo
+        celery -A task_queue_project worker --loglevel=info -P solo -Q jobs
         ```
     *   *(Optional) For concurrency on non-Windows or using gevent/eventlet:*
         ```bash
         # Example with 4 concurrent workers (prefork pool - may have issues on Windows)
-        # celery -A task_queue_project worker --loglevel=info -c 4
+        # celery -A task_queue_project worker --loglevel=info -c 4 -Q jobs
         # Example with gevent (requires pip install gevent)
-        # celery -A task_queue_project worker --loglevel=info -P gevent -c 100
+        # celery -A task_queue_project worker --loglevel=info -P gevent -c 100 -Q jobs
         ```
+    *   **Note:** The `-Q jobs` parameter is important to ensure the worker consumes from the priority-enabled queue.
 
 3.  **Start Celery Beat (for scheduled tasks):**
     *   Make sure your virtual environment is activated.
@@ -113,3 +114,11 @@ You need to run the following components, preferably in separate terminal window
 
 *   Check the output of the Celery worker terminal for task processing logs.
 *   Monitor job statuses via the Django Admin interface (`/admin/jobs/job/`).
+
+## Priority Support
+
+*   Tasks are executed based on their priority level (higher values = higher priority).
+*   When creating a job, set the priority field to a value between 0-10 (default is 0).
+*   The priority system requires Redis as the broker and the worker must be started with the `-Q jobs` parameter.
+*   Tasks with the same priority are executed in FIFO (First In, First Out) order.
+*   Priority only affects tasks that are already in the queue - it doesn't preempt currently running tasks.

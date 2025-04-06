@@ -4,6 +4,7 @@ django>=4.0,<5.0  # Or specify your exact Django version if needed
 # Celery Task Queue
 celery>=5.0,<6.0
 redis>=4.0,<5.0  # Redis client library for Celery broker/backend
+kombu>=5.0,<6.0  # Messaging library used by Celery
 
 # PostgreSQL Database Adapter
 psycopg2-binary>=2.9,<3.0

@@ -35,10 +35,12 @@ def create_job_view(request):
                     # Pass any other task-specific kwargs needed by process_job_task
                 }
                 celery_options = {
-                    'priority': priority,
+                    'priority': priority,  # This is used by the router to select the queue
                     'retry_policy': {
                         'max_retries': job.max_retries,
-                    }
+                    },
+                    # Explicitly set the queue based on priority
+                    'queue': f'priority_{priority}'
                 }
 
                 # Use 'eta' if scheduled_time is set and in the future
