@@ -4,7 +4,9 @@ from .forms import CreateJobForm # We will update this form later to include sch
 from .models import Job
 from .tasks import process_job_task
 import logging
-from django.utils import timezone # Import timezone
+from django.utils import timezone
+
+from django.db import models
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,9 @@ def create_job_view(request):
             scheduled_time_input = form.cleaned_data.get('scheduled_time')
 
             try:
+                # بجيب أعلى أولوية موجودة في قاعدة البيانات قبل إنشاء المهمة الجديدة
+                existing_max_priority = Job.objects.aggregate(max_priority=models.Max('priority'))['max_priority'] or 0
+                
                 # Create the Job record in the database
                 job = Job.objects.create(
                     task_name=task_name,
@@ -34,10 +39,11 @@ def create_job_view(request):
                 task_kwargs = {
                     # Pass any other task-specific kwargs needed by process_job_task
                 }
-
+            
+                
                 # Calculate countdown based on priority (higher priority = lower countdown)
                 # Max priority (10) gets 0 seconds, lowest priority (0) gets 10 seconds
-                countdown = max(0, 10 - priority)
+                countdown = max(0, existing_max_priority - priority)
 
                 celery_options = {
                     'priority': priority,  # Keep this for reference

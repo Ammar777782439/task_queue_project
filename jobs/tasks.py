@@ -8,12 +8,24 @@ from django.utils import timezone
 import logging
 from django.core.mail import send_mail
 from django.conf import settings
+from django.db import models
 
 logger = logging.getLogger(__name__)
 
 class JobTask(Task):
     """Custom Task class to handle Job status updates."""
-
+    # داله لحساب الاولويه المهام 
+    def calculate_countdown(job_id):
+        try:
+            job = Job.objects.get(id=job_id)
+            # احصل على أعلى أولوية موجودة في قاعدة البيانات
+            existing_max_priority = Job.objects.aggregate(max_priority=models.Max('priority'))['max_priority'] or 0
+            # حساب العد التنازلي بناءً على الأولوية
+            countdown = max(0, existing_max_priority - job.priority)
+            return countdown
+        except Job.DoesNotExist:
+            return 5  # قيمة افتراضية لو المهمة مش موجودة
+    
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Handle task failure after all retries."""
         job_id = args[0] if args else None
@@ -23,18 +35,23 @@ class JobTask(Task):
                 job.status = 'failed'
                 job.error_message = f"Task failed after retries: {einfo}"
                 job.last_attempt_time = timezone.now()
-                job.permanently_failed = True # Set the flag for permanent failure
+                job.permanently_failed = True  # Set the flag for permanent failure
                 job.save(update_fields=['status', 'error_message', 'last_attempt_time', 'permanently_failed'])
 
                 # Log critical error
                 logger.critical(f"ALERT: Job {job_id} ({job.task_name}) has failed permanently after all retries. Error: {einfo}")
+
+                # استخدام حساب العد التنازلي بناءً على الأولوية
+                countdown = self.calculate_countdown(job_id)
+
+                # إعادة جدولة المهمة بناءً على الأولوية
+                self.retry(countdown=countdown)
 
                 # Send the failed task to the dead letter queue
                 send_to_dead_letter_queue.delay(job_id, str(exc), str(einfo))
 
             except Job.DoesNotExist:
                 logger.error(f"Job {job_id} not found during final failure handling.")
-                # Also log critical here as the job record is missing after failure
                 logger.critical(f"ALERT: Job {job_id} record not found during final failure handling. Error: {einfo}")
             except Exception as e:
                 logger.error(f"Error during final failure handling for job {job_id}: {e}")

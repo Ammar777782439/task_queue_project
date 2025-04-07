@@ -6,61 +6,50 @@ from django.utils import timezone # Import timezone
 
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
-    list_display = ('id', 'task_name', 'status', 'permanently_failed', 'priority', 'retry_count', 'created_at', 'last_attempt_time') # Added permanently_failed
-    list_filter = ('status', 'permanently_failed', 'priority', 'created_at') # Added permanently_failed
+    list_display = ('id', 'task_name', 'status', 'permanently_failed', 'priority', 'retry_count', 'created_at', 'last_attempt_time')
+    list_filter = ('status', 'permanently_failed', 'priority', 'created_at')
     search_fields = ('id', 'task_name', 'status')
     ordering = ('-created_at',)
-    readonly_fields = ('status', 'retry_count', 'last_attempt_time', 'error_message', 'created_at', 'updated_at', 'permanently_failed') # Added permanently_failed
+    readonly_fields = ('status', 'retry_count', 'last_attempt_time', 'error_message', 'created_at', 'updated_at', 'permanently_failed')
     list_per_page = 25
-    actions = ['retry_selected_jobs'] # Add custom action
+    actions = ['retry_selected_jobs', 'fail_completed_jobs']  # إضافة أكشن جديدة
 
     fieldsets = (
         (None, {
             'fields': ('task_name', 'priority', 'max_retries', 'scheduled_time')
         }),
         ('Status & Tracking', {
-            'fields': ('status', 'permanently_failed', 'retry_count', 'last_attempt_time', 'error_message', 'created_at', 'updated_at'), # Added permanently_failed
-            'classes': ('collapse',) # Keep this section collapsed by default
+            'fields': ('status', 'permanently_failed', 'retry_count', 'last_attempt_time', 'error_message', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
         }),
     )
 
     @admin.action(description='إعادة محاولة المهام الفاشلة المحددة (Retry selected failed jobs)')
     def retry_selected_jobs(self, request, queryset):
-        """
-        Admin action to reset and requeue selected failed jobs.
-        """
         retried_count = 0
         skipped_count = 0
         for job in queryset:
             if job.status == 'failed':
-                # Reset job status and retry count
+                # إعادة ضبط حالة المهمة وعدد المحاولات
                 job.status = 'pending'
                 job.retry_count = 0
-                job.error_message = None # Clear previous error
-                job.last_attempt_time = None # Clear last attempt time
-                job.permanently_failed = False # Reset the permanent failure flag
-                job.save(update_fields=['status', 'retry_count', 'error_message', 'last_attempt_time', 'permanently_failed']) # Added permanently_failed
+                job.error_message = None
+                job.last_attempt_time = None
+                job.permanently_failed = False
+                job.save(update_fields=['status', 'retry_count', 'error_message', 'last_attempt_time', 'permanently_failed'])
 
-                # Prepare Celery task arguments and options
                 task_args = [job.id]
                 task_kwargs = {}
-
-                # Calculate countdown based on priority (higher priority = lower countdown)
-                # Max priority (10) gets 0 seconds, lowest priority (0) gets 10 seconds
                 countdown = max(0, 10 - job.priority)
 
                 celery_options = {
-                    'priority': job.priority,  # Keep this for reference
-                    'retry_policy': {
-                        'max_retries': job.max_retries,
-                    },
-                    'countdown': countdown  # Add countdown based on priority
+                    'priority': job.priority,
+                    'retry_policy': {'max_retries': job.max_retries},
+                    'countdown': countdown
                 }
-                # Use 'eta' if scheduled_time is set and in the future
                 if job.scheduled_time and job.scheduled_time > timezone.now():
                     celery_options['eta'] = job.scheduled_time
 
-                # Requeue the job
                 process_job_task.apply_async(
                     args=task_args,
                     kwargs=task_kwargs,
@@ -75,6 +64,20 @@ class JobAdmin(admin.ModelAdmin):
         if skipped_count:
             self.message_user(request, f'تم تخطي {skipped_count} مهمة لأنها ليست في حالة "فشل".', messages.WARNING)
 
+    @admin.action(description='جعل المهام المكتملة تفشل')
+    def fail_completed_jobs(self, request, queryset):
+        """
+        أكشن لتحويل المهام المكتملة إلى حالة فاشلة مع تسجيل عدد المحاولات
+        """
+        count = 0  # عداد المهام التي تم تحديثها
+        for job in queryset:
+            if job.status == 'completed':  # تأكد من أن الحالة هي مكتمل
+                job.status = 'failed'  # تغيير الحالة إلى فاشلة
+                job.retry_count += 1  # زيادة عدد المحاولات
+                job.save(update_fields=['status', 'retry_count'])  # حفظ التغييرات في قاعدة البيانات
+                count += 1
+        
+        self.message_user(request, f"تم تحويل {count} مهمة إلى فاشلة")  # إظهار رسالة للمستخدم بعد التحديث
 
 @admin.register(DeadLetterQueue)
 class DeadLetterQueueAdmin(admin.ModelAdmin):
