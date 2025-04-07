@@ -1,23 +1,16 @@
-"""
-URL configuration for task_queue_project project.
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.1/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
-from django.contrib import admin
-from django.urls import path, include # Add include
+# نستدعي الحاجات اللي بنحتاجها
+from django.contrib import admin # عشان نضيف الرابط حق لوحة التحكم
+from django.urls import path, include # path عشان نعرف كل رابط لوحده، و include عشان نضم ملف روابط ثاني
 
+# هذي القائمة هي اللي فيها كل الروابط الرئيسية حق المشروع
 urlpatterns = [
+    # الرابط حق لوحة تحكم الأدمن اللي تجي مع جانغو
+    # لما تطلب /admin/ بيوديك لهناك
     path("admin/", admin.site.urls),
-    path("jobs/", include("jobs.urls")), # Include jobs app URLs
+
+    # هانا بنقول لجانغو: أي رابط يبدأ بـ /jobs/
+    # روح دور على باقي الرابط في الملف حق الروابط حق تطبيق jobs
+    # اللي هو بيكون موجود في jobs/urls.py
+    path("jobs/", include("jobs.urls")),
 ]

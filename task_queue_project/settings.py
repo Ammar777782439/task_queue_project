@@ -130,25 +130,64 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
-# Celery settings
-CELERY_BROKER_URL = 'redis://localhost:16379/0'
+# --- إعدادات Celery ---
+
+# عنوان الوسيط (Broker) اللي بيستخدمه Celery عشان يستقبل ويرسل المهام
+# هنا بنستخدم Redis اللي شغال على نفس الجهاز (localhost) على البورت 16379 وقاعدة البيانات رقم 0
+CELERY_BROKER_URL = 'redis://localhost:16379/0' # تأكد إن Redis شغال على هذا البورت
+
+# أنواع المحتوى اللي يقبلها Celery (بنستخدم JSON)
 CELERY_ACCEPT_CONTENT = ['json']
+
+# الصيغة اللي بيستخدمها Celery لتحويل بيانات المهام قبل إرسالها (بنستخدم JSON)
 CELERY_TASK_SERIALIZER = 'json'
+
+# عنوان الباكند (Backend) اللي بيستخدمه Celery عشان يخزن نتائج المهام (لو حبينا نعرف نتيجة مهمة معينة)
+# هنا بنستخدم نفس الـ Redis اللي استخدمناه للوسيط
 CELERY_RESULT_BACKEND = 'redis://localhost:16379/0'
 
-# Queue settings
+# اسم الطابور (Queue) الافتراضي اللي بتروح له المهام لو ما حددنا طابور ثاني
 CELERY_TASK_DEFAULT_QUEUE = 'default'
 
-# Concurrency control settings
-CELERY_WORKER_CONCURRENCY = 4  # Exactly 4 concurrent tasks
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Only prefetch one task at a time
-CELERY_TASK_ACKS_LATE = True  # Acknowledge tasks after they are executed
+# --- إعدادات التحكم في التزامن (Concurrency) للعمال (Workers) ---
 
-# Additional Celery settings
+# كم مهمة يقدر العامل (worker) الواحد ينفذها بنفس الوقت (تزامنيًا)
+# هنا حددنا 4 مهام بالضبط
+CELERY_WORKER_CONCURRENCY = 4
+
+# كم مهمة إضافية يسحبها العامل مقدماً ويخليها جاهزة عنده (prefetch)
+# لما نخليه 1، العامل ما يسحب مهمة جديدة إلا لما يخلص اللي في يده أو يكون فاضي
+# هذا مفيد عشان نضمن توزيع المهام بشكل أفضل لو عندنا أكثر من عامل
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# متى العامل يرسل تأكيد (acknowledgment) للوسيط إنه استلم المهمة؟
+# لما تكون True، العامل ما يرسل التأكيد إلا بعد ما ينفذ المهمة بنجاح (أو تفشل نهائياً)
+# هذا يضمن إنه لو العامل مات فجأة وسط تنفيذ مهمة، المهمة هذي ما تضيع وترجع للطابور عشان عامل ثاني ينفذها
+# لو كانت False (الافتراضي)، العامل يرسل التأكيد أول ما يستلم المهمة، فلو مات وسط التنفيذ، المهمة بتضيع
+CELERY_TASK_ACKS_LATE = True
+
+# --- إعدادات Celery إضافية ---
+
+# هل Celery ينشئ الطوابير تلقائياً لو ما كانت موجودة؟ (نعم)
 CELERY_TASK_CREATE_MISSING_QUEUES = True
-CELERY_TASK_ACKS_LATE = True  # Acknowledge tasks after they are executed, not when they're received
 
-# Email settings for failure notifications
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development - prints emails to console
+
+# --- إعدادات الإيميل لإشعارات الفشل ---
+
+# الباكند اللي بيستخدمه جانغو لإرسال الإيميلات
+# هنا بنستخدم console.EmailBackend، وهذا بيطبع الإيميلات في الكونسول بدل ما يرسلها فعلاً (مناسب للتطوير)
+# في البيئة الحقيقية، لازم نغيره لإعدادات سيرفر SMTP حقيقي
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.example.com'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = 'user@example.com'
+# EMAIL_HOST_PASSWORD = 'password'
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# الإيميل الافتراضي اللي بتظهر الرسائل إنها مرسلة منه
 DEFAULT_FROM_EMAIL = 'noreply@example.com'
-ADMIN_EMAILS = ['ammarragha@gmail.com']  # Add your email here to receive failure notifications
+
+# قائمة بإيميلات المدراء اللي بنرسل لهم إشعارات لما مهمة تفشل فشل نهائي
+# حط إيميلك هنا عشان توصلك الإشعارات
+ADMIN_EMAILS = ['ammarragha@gmail.com']
