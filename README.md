@@ -1,124 +1,208 @@
-# Asynchronous Task Queue Project
+# نظام قائمة المهام المتزامنة (Asynchronous Task Queue)
 
-This project implements an asynchronous task queue using Django, Celery, Redis, and PostgreSQL.
+هذا المشروع يقدم نظام قائمة مهام متزامنة باستخدام Django وCelery وRedis وPostgreSQL.
 
-## Features
+## الميزات الرئيسية
 
-*   **Job Persistence:** Jobs are stored in a PostgreSQL database.
-*   **Retry Mechanism:** Failed tasks are automatically retried with exponential backoff.
-*   **Job Prioritization:** Tasks can be assigned priorities (requires broker support).
-*   **Concurrency Control:** Celery worker concurrency can be configured.
-*   **Job Status Tracking:** Job status (pending, in\_progress, completed, failed) is tracked in the database.
-*   **Failure Handling:** Basic failure handling logs errors and updates status. Further actions (alerting, dead-letter queue) can be added.
-*   **Web Interface:** A simple web form to create and queue new jobs.
+* **حفظ المهام**: يتم تخزين المهام في قاعدة بيانات PostgreSQL.
+* **آلية إعادة المحاولة**: يتم إعادة محاولة المهام الفاشلة تلقائيًا مع تأخير تصاعدي.
+* **أولوية المهام**: يمكن تعيين أولويات للمهام (القيمة الأعلى = أولوية أعلى).
+* **التحكم في التزامن**: يمكن تكوين عدد المهام المتزامنة (بالضبط 4 مهام متزامنة).
+* **تتبع حالة المهام**: يتم تتبع حالة المهام (قيد الانتظار، قيد التنفيذ، مكتملة، فاشلة) في قاعدة البيانات.
+* **معالجة الفشل**: المهام الفاشلة تنتقل إلى قائمة انتظار الرسائل الميتة (Dead Letter Queue) بعد استنفاد محاولات إعادة التنفيذ.
+* **واجهة ويب**: واجهة بسيطة لإنشاء وجدولة مهام جديدة.
 
-## Setup and Running
+## متطلبات التشغيل
 
-**Prerequisites:**
+* Python 3.x
+* PostgreSQL
+* Redis (يمكن تشغيله باستخدام Docker)
+* بيئة Python افتراضية (مثل `venv`)
 
-*   Python 3.x
-*   PostgreSQL server running and accessible.
-*   Docker and Docker Compose (for running Redis).
-*   A Python virtual environment tool (like `venv`).
+## خطوات الإعداد
 
-**Setup Steps:**
+### 1. إنشاء وتفعيل بيئة Python افتراضية:
 
-1.  **Clone the repository (if applicable) or ensure you are in the project directory.**
+```bash
+# إنشاء بيئة افتراضية
+python -m venv venv
 
-2.  **Create and activate a Python virtual environment:**
-    ```bash
-    python -m venv venv
-    # On Windows:
-    venv\Scripts\activate
-    # On macOS/Linux:
-    # source venv/bin/activate
-    ```
+# تفعيل البيئة الافتراضية (Windows)
+venv\Scripts\activate
 
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+# تفعيل البيئة الافتراضية (macOS/Linux)
+# source venv/bin/activate
+```
 
-4.  **Configure Database:**
-    *   Ensure your PostgreSQL server is running.
-    *   Create a database named `task_queue_db` (or update `DATABASES` in `task_queue_project/settings.py` with your database details: NAME, USER, PASSWORD, HOST, PORT).
+### 2. تثبيت المتطلبات:
 
-5.  **Apply Database Migrations:**
-    ```bash
-    python manage.py makemigrations jobs
-    python manage.py migrate
-    ```
+```bash
+pip install -r requirements.txt
+```
 
-6.  **Create a Django Superuser (for admin access):**
-    ```bash
-    python manage.py createsuperuser
-    ```
+### 3. تكوين قاعدة البيانات:
 
-**Running the Services:**
+* تأكد من تشغيل خادم PostgreSQL.
+* قم بإنشاء قاعدة بيانات باسم `task_queue_db` (أو قم بتحديث إعدادات قاعدة البيانات في `task_queue_project/settings.py`).
 
-You need to run the following components, preferably in separate terminal windows/tabs:
+### 4. تطبيق ترحيلات قاعدة البيانات:
 
-1.  **Start Redis using Docker Compose:**
-    ```bash
-    docker-compose up -d redis
-    ```
-    *(Note: This exposes Redis on port 16379 as configured in `docker-compose.yml` and `settings.py`)*
+```bash
+python manage.py migrate
+```
 
-2.  **Start the Celery Worker with Priority Support:**
-    *   Make sure your virtual environment is activated.
-    *   Use the `solo` pool for compatibility on Windows and specify the queue:
-        ```bash
-        celery -A task_queue_project worker --loglevel=info -P solo -Q jobs
-        ```
-    *   *(Optional) For concurrency on non-Windows or using gevent/eventlet:*
-        ```bash
-        # Example with 4 concurrent workers (prefork pool - may have issues on Windows)
-        # celery -A task_queue_project worker --loglevel=info -c 4 -Q jobs
-        # Example with gevent (requires pip install gevent)
-        # celery -A task_queue_project worker --loglevel=info -P gevent -c 100 -Q jobs
-        ```
-    *   **Note:** The `-Q jobs` parameter is important to ensure the worker consumes from the priority-enabled queue.
+### 5. إنشاء مستخدم مشرف (للوصول إلى واجهة الإدارة):
 
-3.  **Start Celery Beat (for scheduled tasks):**
-    *   Make sure your virtual environment is activated.
-    *   In a **separate terminal** from the worker:
-        ```bash
-        celery -A task_queue_project beat --loglevel=info
-        ```
-    *   *(Note: This command starts Celery Beat using the default scheduler. It will pick up tasks scheduled with a specific time (`eta`) but does not support managing periodic tasks via the Django admin, which requires installing `django-celery-beat`.)*
+```bash
+python manage.py createsuperuser
+```
 
-4.  **Start the Django Development Server:**
-    *   Make sure your virtual environment is activated.
-    ```bash
-    python manage.py runserver
-    ```
+## تشغيل النظام
 
-**Accessing the Application:**
+يجب تشغيل المكونات التالية، يفضل في نوافذ طرفية منفصلة:
 
-*   **Web Interface (Create Job):** `http://127.0.0.1:8000/jobs/create/`
-*   **Django Admin Interface:** `http://127.0.0.1:8000/admin/` (Log in with your superuser credentials to view and manage jobs).
+### 1. تشغيل Redis:
 
-## Creating Jobs
+```bash
+# باستخدام Docker
+docker-compose up -d redis
+```
 
-*   **Via Web Interface:** Navigate to `http://127.0.0.1:8000/jobs/create/`, fill in the form (optionally set a future "Scheduled Time"), and click "Create Job".
-*   **Via Management Command:**
-    ```bash
-    # Immediate execution
-    python manage.py create_job "Immediate Task" --priority 5 --max_retries 2
+### 2. تشغيل Celery Worker:
 
-    # Scheduled execution (Requires Celery Beat to be running)
-    python manage.py create_job "Scheduled Task" --schedule_at "2025-04-07 10:30:00"
-    ```
+```bash
+# تشغيل Celery Worker مع دعم التزامن (بالضبط 4 مهام متزامنة)
+celery -A task_queue_project worker --loglevel=info -P gevent --concurrency=4 --prefetch-multiplier=1
+```
 
-## Monitoring
+> **ملاحظة هامة**: يجب تثبيت gevent أولاً: `pip install gevent`
 
-*   Check the output of the Celery worker terminal for task processing logs.
-*   Monitor job statuses via the Django Admin interface (`/admin/jobs/job/`).
+### 3. تشغيل خادم Django:
 
-## Priority Support
+```bash
+python manage.py runserver
+```
 
-*   Tasks are executed based on their priority level (higher values = higher priority).
-*   When creating a job, set the priority field to a value between 0-10 (default is 0).
-*   The priority system requires Redis as the broker and the worker must be started with the `-Q jobs` parameter.
-*   Tasks with the same priority are executed in FIFO (First In, First Out) order.
-*   Priority only affects tasks that are already in the queue - it doesn't preempt currently running tasks.
+## الوصول إلى التطبيق
+
+* **واجهة الويب (إنشاء مهمة)**: `http://127.0.0.1:8000/jobs/create/`
+* **واجهة الإدارة**: `http://127.0.0.1:8000/admin/` (قم بتسجيل الدخول باستخدام بيانات المستخدم المشرف)
+
+## إنشاء المهام
+
+### عبر واجهة الويب:
+
+1. انتقل إلى `http://127.0.0.1:8000/jobs/create/`
+2. املأ النموذج (يمكنك تعيين أولوية وعدد محاولات إعادة التنفيذ)
+3. انقر على "إنشاء مهمة"
+
+### عبر أمر الإدارة:
+
+```bash
+# إنشاء مهمة للتنفيذ الفوري
+python manage.py test_priority_concurrency.py "مهمة فورية" --priority 5 --max_retries 2
+
+### عبر واجهة الإدارة:
+
+1. انتقل إلى `http://127.0.0.1:8000/admin/jobs/job/add/`
+2. املأ النموذج وانقر على "حفظ"
+
+## اختبار الميزات
+
+### 1. اختبار الأولوية والتزامن:
+
+```bash
+# تشغيل اختبار الأولوية والتزامن
+run_priority_concurrency_test.bat
+```
+
+أو يدويًا:
+
+```bash
+python manage.py test_priority_concurrency --count=12 --sleep=15 --clear
+```
+
+### 2. اختبار معالجة الفشل وقائمة انتظار الرسائل الميتة:
+
+```bash
+# تشغيل اختبار معالجة الفشل
+test_dead_letter_queue.bat
+```
+
+أو يدويًا:
+
+```bash
+python manage.py test_dead_letter_queue
+```
+
+## معالجة الفشل وقائمة انتظار الرسائل الميتة
+
+عندما تفشل مهمة بعد استنفاد جميع محاولات إعادة التنفيذ (الافتراضي: 3 محاولات)، يحدث ما يلي:
+
+1. يتم تحديث حالة المهمة إلى "فاشلة" وتعيين علامة `permanently_failed` إلى `True`.
+2. يتم إرسال المهمة إلى قائمة انتظار الرسائل الميتة (Dead Letter Queue).
+3. يتم إرسال إشعار (سجل نقدي وبريد إلكتروني إذا تم تكوينه).
+
+### إدارة المهام الفاشلة:
+
+1. انتقل إلى `http://127.0.0.1:8000/admin/jobs/deadletterqueue/`
+2. يمكنك:
+   - عرض تفاصيل الخطأ
+   - إعادة معالجة المهام الفاشلة
+   - تمييز المهام كمحلولة
+   - إرسال إشعارات يدويًا
+
+## تجربة فشل المهام يدويًا:
+
+1. انتقل إلى `http://127.0.0.1:8000/admin/jobs/job/`
+2. حدد مهمة مكتملة
+3. اختر "تحويل المهام المكتملة إلى فاشلة لاختبار Dead Letter Queue" من قائمة الإجراءات
+4. انتظر بضع ثوانٍ
+5. تحقق من قائمة انتظار الرسائل الميتة: `http://127.0.0.1:8000/admin/jobs/deadletterqueue/`
+
+## المراقبة
+
+* راقب سجلات Celery Worker للاطلاع على تفاصيل معالجة المهام.
+* راقب حالة المهام عبر واجهة الإدارة (`/admin/jobs/job/`).
+* راقب المهام الفاشلة عبر واجهة إدارة قائمة انتظار الرسائل الميتة (`/admin/jobs/deadletterqueue/`).
+
+## ملفات توثيق إضافية
+
+* **CONCURRENCY_CONTROL.md**: يشرح كيفية التحكم في التزامن وضمان معالجة بالضبط 4 مهام متزامنة.
+* **FAILURE_HANDLING.md**: يشرح آليات معالجة المهام الفاشلة وقائمة انتظار الرسائل الميتة.
+* **TESTING.md**: يشرح كيفية اختبار ميزات النظام المختلفة.
+
+## استكشاف الأخطاء وإصلاحها
+
+### مشكلة: المهام لا تنفذ بالتزامن
+
+**الحل**: تأكد من تشغيل Celery Worker باستخدام gevent:
+
+```bash
+pip install gevent
+celery -A task_queue_project worker --loglevel=info -P gevent --concurrency=4 --prefetch-multiplier=1
+```
+
+### مشكلة: المهام الفاشلة لا تضاف إلى قائمة انتظار الرسائل الميتة
+
+**الحل**: تأكد من تطبيق آخر الترحيلات:
+
+```bash
+python manage.py migrate
+```
+
+### مشكلة: الإشعارات لا تُرسل
+
+**الحل**: تحقق من إعدادات البريد الإلكتروني في `settings.py`:
+
+```python
+# Email settings for failure notifications
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.example.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'your-email@example.com'
+EMAIL_HOST_PASSWORD = 'your-password'
+DEFAULT_FROM_EMAIL = 'noreply@example.com'
+ADMIN_EMAILS = ['admin@example.com']
+```
