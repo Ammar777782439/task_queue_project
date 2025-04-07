@@ -56,16 +56,16 @@ class JobTask(Task):
                  logger.error(f"Error during retry handling for job {job_id}: {e}")
 
 @shared_task(bind=True, base=JobTask, autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=600, retry_jitter=True)
-def process_job_task(self, job_id):
+def process_job_task(self, job_id, sleep_time=10):
     """Processes a job identified by job_id with priority support.
     Jobs with higher priority will be processed first.
-    """
-    """
-    Processes a job identified by job_id.
-    Updates job status and handles retries.
+
+    Args:
+        job_id: The ID of the job to process
+        sleep_time: Time to sleep in seconds to simulate work (default: 10)
     """
     # Log task start
-    logger.info(f"Task {self.request.id} started with job_id={job_id}")
+    logger.info(f"Task {self.request.id} started with job_id={job_id}, sleep_time={sleep_time}")
 
     try:
         job = Job.objects.get(pk=job_id)
@@ -80,8 +80,9 @@ def process_job_task(self, job_id):
 
         # --- Simulate Task Work ---
         # Replace this section with actual task logic (e.g., sending email, generating report)
-        print(f"Processing job {job_id}: {job.task_name}...")
-        time.sleep(10) # Simulate work (Increased for concurrency testing)
+        print(f"Processing job {job_id}: {job.task_name} with priority {job.priority}...")
+        logger.info(f"Job {job_id} ({job.task_name}) with priority {job.priority} is sleeping for {sleep_time} seconds")
+        time.sleep(sleep_time) # Simulate work with configurable sleep time
 
         # Example: Simulate a potential failure for demonstration (Original code - now commented out)
         # import random
