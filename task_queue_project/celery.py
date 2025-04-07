@@ -12,8 +12,9 @@ app = Celery('task_queue_project')
 # the configuration object to child processes.
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
-# Simple configuration with a single queue
-app.conf.worker_prefetch_multiplier = 1  # Process one task at a time
+# Configure concurrency settings
+app.conf.worker_prefetch_multiplier = 4  # Allow each worker to prefetch 4 tasks
+app.conf.worker_concurrency = 4  # Allow 4 concurrent worker processes
 app.conf.worker_disable_rate_limits = True
 
 # Define the default exchange and queue

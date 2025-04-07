@@ -136,10 +136,13 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_BACKEND = 'redis://localhost:16379/0'
 
-# Simple queue settings
+# Queue settings
 CELERY_TASK_DEFAULT_QUEUE = 'default'
+
+# Concurrency control settings
+CELERY_WORKER_CONCURRENCY = 4  # Allow 4 concurrent worker processes
+CELERY_WORKER_PREFETCH_MULTIPLIER = 4  # Allow each worker to prefetch 4 tasks
 
 # Additional Celery settings
 CELERY_TASK_CREATE_MISSING_QUEUES = True
 CELERY_TASK_ACKS_LATE = True  # Acknowledge tasks after they are executed, not when they're received
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Process one task at a time

@@ -59,15 +59,12 @@ def process_job_task(self, job_id):
     Processes a job identified by job_id.
     Updates job status and handles retries.
     """
-    # --- FORCE FAILURE FOR TESTING ---
-    # Raise error immediately to ensure failure for testing permanent failure logic
-
-    # --- END FORCE FAILURE ---
+    # Log task start
+    logger.info(f"Task {self.request.id} started with job_id={job_id}")
 
     try:
-        # The code below will likely not be reached due to the forced failure above
         job = Job.objects.get(pk=job_id)
-        logger.info(f"Starting job {job_id} ({job.task_name})")
+        logger.info(f"Starting job {job_id} ({job.task_name}) with priority {job.priority}")
 
         # Update status to 'in_progress' only if it's pending or failed (for retry)
         if job.status in ['pending', 'failed']:
@@ -79,7 +76,7 @@ def process_job_task(self, job_id):
         # --- Simulate Task Work ---
         # Replace this section with actual task logic (e.g., sending email, generating report)
         print(f"Processing job {job_id}: {job.task_name}...")
-        time.sleep(5) # Simulate work
+        time.sleep(10) # Simulate work (Increased for concurrency testing)
 
         # Example: Simulate a potential failure for demonstration (Original code - now commented out)
         # import random
