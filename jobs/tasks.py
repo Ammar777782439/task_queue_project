@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class JobTask(Task):
     """Custom Task class to handle Job status updates."""
-    # داله لحساب الاولويه المهام 
+    # داله لحساب الاولويه المهام
     def calculate_countdown(job_id):
         try:
             job = Job.objects.get(id=job_id)
@@ -25,7 +25,7 @@ class JobTask(Task):
             return countdown
         except Job.DoesNotExist:
             return 5  # قيمة افتراضية لو المهمة مش موجودة
-    
+
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Handle task failure after all retries."""
         job_id = args[0] if args else None
@@ -41,14 +41,12 @@ class JobTask(Task):
                 # Log critical error
                 logger.critical(f"ALERT: Job {job_id} ({job.task_name}) has failed permanently after all retries. Error: {einfo}")
 
-                # استخدام حساب العد التنازلي بناءً على الأولوية
-                countdown = self.calculate_countdown(job_id)
-
-                # إعادة جدولة المهمة بناءً على الأولوية
-                self.retry(countdown=countdown)
-
                 # Send the failed task to the dead letter queue
+                # هذا يجب أن يتم قبل استدعاء self.retry() لأن retry() يرفع استثناء يوقف تنفيذ الدالة
                 send_to_dead_letter_queue.delay(job_id, str(exc), str(einfo))
+
+                # لا نقوم بإعادة المحاولة هنا لأن المهمة قد فشلت بالفعل بعد استنفاد جميع محاولات إعادة التنفيذ
+                # دالة on_failure تُستدعى فقط بعد استنفاد جميع محاولات إعادة التنفيذ
 
             except Job.DoesNotExist:
                 logger.error(f"Job {job_id} not found during final failure handling.")
@@ -72,7 +70,7 @@ class JobTask(Task):
             except Exception as e:
                  logger.error(f"Error during retry handling for job {job_id}: {e}")
 
-@shared_task(bind=True, base=JobTask, autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=600, retry_jitter=True)
+@shared_task(bind=True, base=JobTask, autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=600, retry_jitter=True, max_retries=3)
 def process_job_task(self, job_id, sleep_time=10):
     """Processes a job identified by job_id with priority support.
     Jobs with higher priority will be processed first.
@@ -260,7 +258,7 @@ def reprocess_failed_task(dlq_entry_id):
         return f"Error: {e}"
 
 
-@shared_task(bind=True, base=JobTask, autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=600, retry_jitter=True, max_retries=2)
+@shared_task(bind=True, base=JobTask, autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=600, retry_jitter=True, max_retries=4)
 def test_failure_task(self, job_id):
     """
     A task that always fails for testing the failure handling mechanism.

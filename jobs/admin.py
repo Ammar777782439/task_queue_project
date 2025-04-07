@@ -2,7 +2,7 @@ from django.contrib import admin, messages
 from .models import Job, DeadLetterQueue
 from .tasks import process_job_task, reprocess_failed_task # Import the tasks
 from django.utils import timezone # Import timezone
-
+from .tasks import send_failure_notification
 
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
@@ -43,10 +43,12 @@ class JobAdmin(admin.ModelAdmin):
                 countdown = max(0, 10 - job.priority)
 
                 celery_options = {
-                    'priority': job.priority,
-                    'retry_policy': {'max_retries': job.max_retries},
-                    'countdown': countdown
-                }
+                    'priority': job.priority,  # Keep this for reference
+                    'retry_policy': {
+                        'max_retries': job.max_retries,
+                    },
+                    'countdown': countdown  # Add countdown based on priority
+                 }
                 if job.scheduled_time and job.scheduled_time > timezone.now():
                     celery_options['eta'] = job.scheduled_time
 
@@ -86,7 +88,7 @@ class DeadLetterQueueAdmin(admin.ModelAdmin):
     search_fields = ('task_name', 'task_id', 'error_message')
     readonly_fields = ('task_id', 'task_name', 'error_message', 'traceback', 'args', 'kwargs',
                        'created_at', 'notification_sent')
-    actions = ['reprocess_selected_tasks', 'send_notifications_for_selected_tasks']
+    actions = ['reprocess_selecte_tasks', 'send_notifications_for_selected_tasks']
 
     fieldsets = (
         (None, {
@@ -135,7 +137,7 @@ class DeadLetterQueueAdmin(admin.ModelAdmin):
         for dlq_entry in queryset:
             if not dlq_entry.notification_sent:
                 # Queue the notification task
-                from .tasks import send_failure_notification
+                
                 send_failure_notification.delay(dlq_entry.id)
                 sent_count += 1
             else:
