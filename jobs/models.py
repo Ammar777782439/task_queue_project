@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
-# هانا نستدعي الحاجات اللي بنحتاجها من جانغو
+
+
 from django.db import models # عشان نعرف الجداول (المودلز) والحقول حقها
 from django.utils import timezone # عشان نتعامل مع الوقت، زي وقت إنشاء السجل
 
