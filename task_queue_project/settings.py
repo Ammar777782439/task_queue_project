@@ -147,3 +147,8 @@ CELERY_TASK_ACKS_LATE = True  # Acknowledge tasks after they are executed
 # Additional Celery settings
 CELERY_TASK_CREATE_MISSING_QUEUES = True
 CELERY_TASK_ACKS_LATE = True  # Acknowledge tasks after they are executed, not when they're received
+
+# Email settings for failure notifications
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development - prints emails to console
+DEFAULT_FROM_EMAIL = 'noreply@example.com'
+ADMIN_EMAILS = ['ammarragha@gmail.com']  # Add your email here to receive failure notifications

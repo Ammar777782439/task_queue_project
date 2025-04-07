@@ -1,6 +1,6 @@
 from django.contrib import admin, messages
-from .models import Job
-from .tasks import process_job_task # Import the task
+from .models import Job, DeadLetterQueue
+from .tasks import process_job_task, reprocess_failed_task # Import the tasks
 from django.utils import timezone # Import timezone
 
 
@@ -74,3 +74,71 @@ class JobAdmin(admin.ModelAdmin):
             self.message_user(request, f'تمت إعادة جدولة {retried_count} مهمة فاشلة بنجاح.', messages.SUCCESS)
         if skipped_count:
             self.message_user(request, f'تم تخطي {skipped_count} مهمة لأنها ليست في حالة "فشل".', messages.WARNING)
+
+
+@admin.register(DeadLetterQueue)
+class DeadLetterQueueAdmin(admin.ModelAdmin):
+    list_display = ('id', 'task_name', 'original_job', 'created_at', 'reprocessed', 'notification_sent')
+    list_filter = ('reprocessed', 'notification_sent', 'created_at')
+    search_fields = ('task_name', 'task_id', 'error_message')
+    readonly_fields = ('task_id', 'task_name', 'error_message', 'traceback', 'args', 'kwargs',
+                       'created_at', 'notification_sent')
+    actions = ['reprocess_selected_tasks', 'send_notifications_for_selected_tasks']
+
+    fieldsets = (
+        (None, {
+            'fields': ('original_job', 'task_name', 'task_id')
+        }),
+        ('Error Details', {
+            'fields': ('error_message', 'traceback'),
+            'classes': ('collapse',)
+        }),
+        ('Task Details', {
+            'fields': ('args', 'kwargs'),
+            'classes': ('collapse',)
+        }),
+        ('Status', {
+            'fields': ('reprocessed', 'reprocessed_at', 'notification_sent', 'created_at')
+        }),
+    )
+
+    @admin.action(description='إعادة معالجة المهام المحددة (Reprocess selected tasks)')
+    def reprocess_selected_tasks(self, request, queryset):
+        """
+        Admin action to reprocess selected failed tasks.
+        """
+        reprocessed_count = 0
+        skipped_count = 0
+        for dlq_entry in queryset:
+            if not dlq_entry.reprocessed:
+                # Queue the reprocessing task
+                reprocess_failed_task.delay(dlq_entry.id)
+                reprocessed_count += 1
+            else:
+                skipped_count += 1
+
+        if reprocessed_count:
+            self.message_user(request, f'تمت جدولة إعادة معالجة {reprocessed_count} مهمة فاشلة.', messages.SUCCESS)
+        if skipped_count:
+            self.message_user(request, f'تم تخطي {skipped_count} مهمة لأنها تمت إعادة معالجتها بالفعل.', messages.WARNING)
+
+    @admin.action(description='إرسال إشعارات للمهام المحددة (Send notifications for selected tasks)')
+    def send_notifications_for_selected_tasks(self, request, queryset):
+        """
+        Admin action to send notifications for selected failed tasks.
+        """
+        sent_count = 0
+        skipped_count = 0
+        for dlq_entry in queryset:
+            if not dlq_entry.notification_sent:
+                # Queue the notification task
+                from .tasks import send_failure_notification
+                send_failure_notification.delay(dlq_entry.id)
+                sent_count += 1
+            else:
+                skipped_count += 1
+
+        if sent_count:
+            self.message_user(request, f'تم إرسال إشعارات لـ {sent_count} مهمة فاشلة.', messages.SUCCESS)
+        if skipped_count:
+            self.message_user(request, f'تم تخطي {skipped_count} مهمة لأنه تم إرسال إشعارات لها بالفعل.', messages.WARNING)

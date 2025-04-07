@@ -1,38 +1,43 @@
 from __future__ import absolute_import, unicode_literals
 import time
+import json
 from celery import shared_task, Task
-from .models import Job
+from celery.signals import task_failure
+from .models import Job, DeadLetterQueue
 from django.utils import timezone
 import logging
+from django.core.mail import send_mail
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
 class JobTask(Task):
     """Custom Task class to handle Job status updates."""
 
-    # def on_failure(self, exc, task_id, args, kwargs, einfo):
-    #     """Handle task failure after all retries."""
-    #     job_id = args[0] if args else None
-    #     if job_id:
-    #         try:
-    #             job = Job.objects.get(pk=job_id)
-    #             job.status = 'failed'
-    #             job.error_message = f"Task failed after retries: {einfo}"
-    #             job.last_attempt_time = timezone.now()
-    #             job.permanently_failed = True # Set the flag for permanent failure
-    #             job.save(update_fields=['status', 'error_message', 'last_attempt_time', 'permanently_failed']) # Added permanently_failed
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        """Handle task failure after all retries."""
+        job_id = args[0] if args else None
+        if job_id:
+            try:
+                job = Job.objects.get(pk=job_id)
+                job.status = 'failed'
+                job.error_message = f"Task failed after retries: {einfo}"
+                job.last_attempt_time = timezone.now()
+                job.permanently_failed = True # Set the flag for permanent failure
+                job.save(update_fields=['status', 'error_message', 'last_attempt_time', 'permanently_failed'])
 
-    #             # Simulate Alerting / Critical Logging
-    #             logger.critical(f"ALERT: Job {job_id} ({job.task_name}) has failed permanently after all retries and marked as such. Error: {einfo}")
-    #             # In a real system, replace logger.critical with code to send an email,
-    #             # push to a monitoring system (e.g., Sentry), or trigger another alert mechanism.
+                # Log critical error
+                logger.critical(f"ALERT: Job {job_id} ({job.task_name}) has failed permanently after all retries. Error: {einfo}")
 
-    #         except Job.DoesNotExist:
-    #             logger.error(f"Job {job_id} not found during final failure handling.")
-    #             # Also log critical here as the job record is missing after failure
-    #             logger.critical(f"ALERT: Job {job_id} record not found during final failure handling. Error: {einfo}")
-    #         except Exception as e:
-    #              logger.error(f"Error during final failure handling for job {job_id}: {e}")
+                # Send the failed task to the dead letter queue
+                send_to_dead_letter_queue.delay(job_id, str(exc), str(einfo))
+
+            except Job.DoesNotExist:
+                logger.error(f"Job {job_id} not found during final failure handling.")
+                # Also log critical here as the job record is missing after failure
+                logger.critical(f"ALERT: Job {job_id} record not found during final failure handling. Error: {einfo}")
+            except Exception as e:
+                logger.error(f"Error during final failure handling for job {job_id}: {e}")
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
         """Handle task retry."""
@@ -102,3 +107,164 @@ def process_job_task(self, job_id):
         # The autoretry_for mechanism will handle retrying based on the exception
         # The on_retry and on_failure methods in JobTask handle status updates
         raise # Re-raise the exception for Celery to handle retry/failure
+
+
+@shared_task
+def send_to_dead_letter_queue(job_id, error, traceback):
+    """
+    Stores failed tasks in the dead letter queue and sends notifications.
+    """
+    try:
+        # Get the original job
+        job = Job.objects.get(pk=job_id)
+
+        # Create a dead letter queue entry
+        dlq_entry = DeadLetterQueue.objects.create(
+            original_job=job,
+            task_id=job_id,  # Using job_id as task_id for simplicity
+            task_name=job.task_name,
+            error_message=error,
+            traceback=traceback,
+            args=json.dumps([job_id]),
+            kwargs=json.dumps({})
+        )
+
+        # Send notification
+        send_failure_notification.delay(dlq_entry.id)
+
+        logger.info(f"Job {job_id} added to dead letter queue with ID {dlq_entry.id}")
+        return f"Job {job_id} added to dead letter queue"
+    except Job.DoesNotExist:
+        logger.error(f"Job {job_id} not found when adding to dead letter queue")
+        return f"Job {job_id} not found"
+    except Exception as e:
+        logger.error(f"Error adding job {job_id} to dead letter queue: {e}")
+        return f"Error: {e}"
+
+
+@shared_task
+def send_failure_notification(dlq_entry_id):
+    """
+    Sends a notification about a failed task.
+    """
+    try:
+        # Get the dead letter queue entry
+        dlq_entry = DeadLetterQueue.objects.get(pk=dlq_entry_id)
+
+        # Skip if notification already sent
+        if dlq_entry.notification_sent:
+            return f"Notification already sent for DLQ entry {dlq_entry_id}"
+
+        # Prepare notification message
+        subject = f"[ALERT] Task Failed Permanently: {dlq_entry.task_name}"
+        message = f"""Task has failed permanently after multiple retries:
+
+        Task ID: {dlq_entry.task_id}
+        Task Name: {dlq_entry.task_name}
+        Error: {dlq_entry.error_message}
+        Time: {dlq_entry.created_at}
+
+        Please check the admin interface for more details and to reprocess the task if needed.
+        """
+
+        # Send email notification if configured
+        admin_emails = getattr(settings, 'ADMIN_EMAILS', [])
+        if admin_emails:
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                admin_emails,
+                fail_silently=True,
+            )
+            logger.info(f"Sent email notification for failed task {dlq_entry.task_id} to {admin_emails}")
+
+        # Log the notification
+        logger.critical(subject + "\n" + message)
+
+        # Mark notification as sent
+        dlq_entry.notification_sent = True
+        dlq_entry.save(update_fields=['notification_sent'])
+
+        return f"Notification sent for DLQ entry {dlq_entry_id}"
+    except DeadLetterQueue.DoesNotExist:
+        logger.error(f"DLQ entry {dlq_entry_id} not found when sending notification")
+        return f"DLQ entry {dlq_entry_id} not found"
+    except Exception as e:
+        logger.error(f"Error sending notification for DLQ entry {dlq_entry_id}: {e}")
+        return f"Error: {e}"
+
+
+@shared_task
+def reprocess_failed_task(dlq_entry_id):
+    """
+    Reprocesses a failed task from the dead letter queue.
+    """
+    try:
+        # Get the dead letter queue entry
+        dlq_entry = DeadLetterQueue.objects.get(pk=dlq_entry_id)
+
+        # Skip if already reprocessed
+        if dlq_entry.reprocessed:
+            return f"DLQ entry {dlq_entry_id} already reprocessed"
+
+        # Get the original job
+        job = dlq_entry.original_job
+        if not job:
+            return f"Original job not found for DLQ entry {dlq_entry_id}"
+
+        # Reset job status
+        job.status = 'pending'
+        job.retry_count = 0
+        job.error_message = None
+        job.permanently_failed = False
+        job.save(update_fields=['status', 'retry_count', 'error_message', 'permanently_failed'])
+
+        # Queue the job again
+        process_job_task.apply_async(
+            args=[job.id],
+            kwargs={},
+            countdown=0
+        )
+
+        # Mark as reprocessed
+        dlq_entry.reprocessed = True
+        dlq_entry.reprocessed_at = timezone.now()
+        dlq_entry.save(update_fields=['reprocessed', 'reprocessed_at'])
+
+        logger.info(f"Reprocessed failed task from DLQ entry {dlq_entry_id}")
+        return f"Reprocessed DLQ entry {dlq_entry_id}"
+    except DeadLetterQueue.DoesNotExist:
+        logger.error(f"DLQ entry {dlq_entry_id} not found when reprocessing")
+        return f"DLQ entry {dlq_entry_id} not found"
+    except Exception as e:
+        logger.error(f"Error reprocessing DLQ entry {dlq_entry_id}: {e}")
+        return f"Error: {e}"
+
+
+@shared_task(bind=True, base=JobTask, autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=600, retry_jitter=True, max_retries=2)
+def test_failure_task(self, job_id):
+    """
+    A task that always fails for testing the failure handling mechanism.
+    """
+    logger.info(f"Starting test_failure_task for job {job_id}")
+
+    try:
+        job = Job.objects.get(pk=job_id)
+
+        # Update status to 'in_progress'
+        if job.status in ['pending', 'failed']:
+            job.status = 'in_progress'
+            job.last_attempt_time = timezone.now()
+            job.retry_count = self.request.retries
+            job.save(update_fields=['status', 'last_attempt_time', 'retry_count'])
+
+        # Always fail with a test error
+        raise ValueError(f"This is a test failure for job {job_id}")
+
+    except Job.DoesNotExist:
+        logger.error(f"Job {job_id} not found.")
+        return f"Job {job_id} not found."
+    except Exception as exc:
+        logger.error(f"Exception during test_failure_task for job {job_id}: {exc}")
+        raise  # Re-raise the exception for Celery to handle retry/failure
