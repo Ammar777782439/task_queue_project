@@ -274,10 +274,10 @@ def test_failure_task(self, job_id):
             job.last_attempt_time = timezone.now()
             job.retry_count = self.request.retries
             job.save(update_fields=['status', 'last_attempt_time', 'retry_count'])
-
+        
         # Always fail with a test error
         raise ValueError(f"This is a test failure for job {job_id}")
-
+        
     except Job.DoesNotExist:
         logger.error(f"Job {job_id} not found.")
         return f"Job {job_id} not found."

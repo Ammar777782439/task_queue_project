@@ -1,9 +1,10 @@
+import time
 from django.contrib import admin, messages
 from .models import Job, DeadLetterQueue
-from .tasks import process_job_task, reprocess_failed_task # Import the tasks
+from .tasks import process_job_task, reprocess_failed_task, test_failure_task # Import the tasks
 from django.utils import timezone # Import timezone
 from .tasks import send_failure_notification
-
+from jobs.models import DeadLetterQueue
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
     list_display = ('id', 'task_name', 'status', 'permanently_failed', 'priority', 'retry_count', 'created_at', 'last_attempt_time')
@@ -71,14 +72,31 @@ class JobAdmin(admin.ModelAdmin):
         """
         أكشن لتحويل المهام المكتملة إلى حالة فاشلة مع تسجيل عدد المحاولات
         """
-        count = 0  # عداد المهام التي تم تحديثها
+        count = 0 
         for job in queryset:
-            if job.status == 'completed':  # تأكد من أن الحالة هي مكتمل
-                job.status = 'failed'  # تغيير الحالة إلى فاشلة
-                job.retry_count += 1  # زيادة عدد المحاولات
-                job.save(update_fields=['status', 'retry_count'])  # حفظ التغييرات في قاعدة البيانات
-                count += 1
+            if job.status == 'completed':  
+                # job.status = 'failed'  
+                # job.retry_count += 1  
+                # job.save(update_fields=['status', 'retry_count'])
+                # count += 1
+                test_failure_task.apply_async(
+                  args=[job.id],
+                  kwargs={},
+                  countdown=0
+                 )
+                 
+                dlq_entries = DeadLetterQueue.objects.filter(original_job=job)
         
+                if dlq_entries.exists():
+                  self.stdout.write(self.style.SUCCESS(f"Success! Job {queryset.id} was added to the Dead Letter Queue."))
+                  for entry in dlq_entries:
+                      self.stdout.write(f"DLQ Entry ID: {entry.id}")
+                      self.stdout.write(f"Error Message: {entry.error_message[:100]}...")
+                else:
+                    self.stdout.write(self.style.ERROR(f"Error! Job {queryset.id} was NOT added to the Dead Letter Queue."))
+                    self.stdout.write("Check the worker logs for more information.")
+
+                       
         self.message_user(request, f"تم تحويل {count} مهمة إلى فاشلة")  # إظهار رسالة للمستخدم بعد التحديث
 
 @admin.register(DeadLetterQueue)
