@@ -140,8 +140,9 @@ CELERY_RESULT_BACKEND = 'redis://localhost:16379/0'
 CELERY_TASK_DEFAULT_QUEUE = 'default'
 
 # Concurrency control settings
-CELERY_WORKER_CONCURRENCY = 4  # Allow 4 concurrent worker processes
-CELERY_WORKER_PREFETCH_MULTIPLIER = 4  # Allow each worker to prefetch 4 tasks
+CELERY_WORKER_CONCURRENCY = 4  # Exactly 4 concurrent tasks
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Only prefetch one task at a time
+CELERY_TASK_ACKS_LATE = True  # Acknowledge tasks after they are executed
 
 # Additional Celery settings
 CELERY_TASK_CREATE_MISSING_QUEUES = True
