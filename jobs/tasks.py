@@ -170,7 +170,13 @@ def process_job_task(self, job_id, sleep_time=10):
         logger.info(f"The task {job_id} ({job.task_name}) With priority {job.priority} She lies down for a while{sleep_time} Seconds")
         # ناخرها  شوية عشان نمثل إنها بتشتغل
         time.sleep(sleep_time)
+        
 
+
+        
+        import random
+        if random.random() < 0.1: # 10% chance of failure
+            raise Exception("Random failure occurred during task execution.")
         
         # --- المهمة اكتملت ---
         job.status = 'completed'
