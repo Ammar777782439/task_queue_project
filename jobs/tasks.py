@@ -172,9 +172,9 @@ def process_job_task(self, job_id, sleep_time=10):
         time.sleep(sleep_time)
 
         # هاذا كود لمنطق معالجه الفشل يعني المنطق اليه الفشل معلق عليه 
-        # import random
-        # if random.random() < 0.6: # احتمال 60% إنها تفشل
-        #     raise ValueError(f"خطأ محاكاة للمهمة {job_id}")
+        import random
+        if random.random() < 0.6: # احتمال 60% إنها تفشل
+            raise ValueError(f"خطأ محاكاة للمهمة {job_id}")
 
         # --- المهمة اكتملت ---
         job.status = 'completed'
@@ -205,7 +205,7 @@ def process_job_task(self, job_id, sleep_time=10):
         raise
 
 
-# هذي مهمة عشان نرسل المهام الفاشلة لقائمة المهام الميتة (Dead Letter Queue)
+
 # لما المهمة تفشل بعد كل المحاولات، هذي المهمة بتخزنها في قاعدة البيانات
 @shared_task
 def send_to_dead_letter_queue(job_id, error, traceback):

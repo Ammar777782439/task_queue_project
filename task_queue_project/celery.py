@@ -67,9 +67,3 @@ app.autodiscover_tasks()
 # def setup_periodic_tasks(sender, **kwargs):
 #     # هانا ممكن نضيف مهام مجدولة تشتغل بشكل دوري
 #     sender.add_periodic_task(10.0, test.s('hello'), name='add every 10')
-
-# دالة بسيطة للتجربة (ممكن نمسحها بعدين)
-@app.task(bind=True)
-def debug_task(self):
-    # نطبع معلومات عن الطلب حق المهمة عشان نشوف كيف شكلها
-    print(f'Request: {self.request!r}')

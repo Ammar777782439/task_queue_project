@@ -95,10 +95,10 @@ def create_job_view(request):
                 # آخر خطوة: نرسل المهمة لـ Celery عشان ينفذها في الخلفية
                 # apply_async هي الطريقة اللي نرسل فيها المهمة مع الخيارات اللي جهزناها
                 process_job_task.apply_async(
-                    args=task_args, # الوسائط العادية
-                    kwargs=task_kwargs, # الوسائط المفتاحية
-                    **celery_options # باقي الخيارات (priority, eta أو countdown, retry_policy)
-                )
+                args=[job.id],
+                kwargs={},  # بأرسل له وقت النوم عشان يحاكي شغل حقيقي
+                countdown=countdown
+            )
 
                 # نعرض رسالة النجاح اللي جهزناها للمستخدم فوق
                 messages.success(request, success_message)
