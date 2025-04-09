@@ -171,11 +171,7 @@ def process_job_task(self, job_id, sleep_time=10):
         # ناخرها  شوية عشان نمثل إنها بتشتغل
         time.sleep(sleep_time)
 
-        # هاذا كود لمنطق معالجه الفشل يعني المنطق اليه الفشل معلق عليه 
-        import random
-        if random.random() < 0.6: # احتمال 60% إنها تفشل
-            raise ValueError(f"Simulation error for the task {job_id}")
-
+        
         # --- المهمة اكتملت ---
         job.status = 'completed'
         job.error_message = None
