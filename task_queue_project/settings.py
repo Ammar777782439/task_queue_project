@@ -80,7 +80,7 @@ WSGI_APPLICATION = "task_queue_project.wsgi.application"
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'task_queue_db',
+        'NAME': 'task_queue_dbb',
         'USER': 'postgres',
         'PASSWORD': 'root',
         'HOST': 'localhost',
