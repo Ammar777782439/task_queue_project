@@ -12,61 +12,65 @@ from .tasks import send_failure_notification
 # سجلنا الموديل في لوحه التخكم
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
-    
+
     list_display = ('id', 'task_name', 'status', 'permanently_failed', 'priority', 'retry_count', 'created_at', 'started_at', 'completed_at', 'execution_duration', 'last_attempt_time') # أضفنا حقول الوقت والمدة
-    
+
     list_filter = ('status', 'permanently_failed', 'priority', 'created_at')
-    
+
     search_fields = ('id', 'task_name', 'status')
-   
+
     ordering = ('-created_at',)
-    
+
     readonly_fields = ('status', 'retry_count', 'last_attempt_time', 'error_message', 'created_at', 'updated_at', 'permanently_failed', 'started_at', 'completed_at', 'execution_duration') # أضفنا حقول الوقت والمدة
-   
+
     list_per_page = 25
-   
+
     actions = ['retry_selected_jobs', 'fail_completed_jobs']
 
-    
+    # استخدام قوالب مخصصة للتحديث التلقائي
+    # change_list_template = 'admin/jobs/job/change_list.html'
+    # change_form_template = 'admin/jobs/job/change_form.html'
+
+
     fieldsets = (
-       
+
         (None, {
             'fields': ('task_name', 'priority', 'max_retries', 'scheduled_time')
         }),
-        
+
         ('Status & Tracking', {
             'fields': ('status', 'permanently_failed', 'retry_count', 'last_attempt_time', 'error_message', 'created_at', 'updated_at', 'started_at', 'completed_at', 'execution_duration'), # أضفنا حقول الوقت والمدة
-            'classes': ('collapse',)  
+            'classes': ('collapse',)
         }),
     )
 
-    
+
     def save_model(self, request, obj, form, change):
         """
         تجاوز دالة حفظ الموديل عشان نرسل المهمة لـ Celery بعد إنشائها من الأدمن.
         """
-       
+
         super().save_model(request, obj, form, change)
 
-       
-        is_new = not change 
+
+        is_new = not change
 
         if is_new or obj.status == 'pending':
-           
+
             countdown = max(0, 10 - obj.priority)
 
-           
-            
 
-           
-            
+
+
+
+
             process_job_task.apply_async(
                 args=[obj.id],
                 kwargs={},
                 countdown=countdown
             )
 
-            
+
             self.message_user(
                 request,
                 f'تم إنشاء المهمة "{obj.task_name}" (رقم {obj.id}) وإرسالها للمعالجة.',
@@ -217,6 +221,10 @@ class DeadLetterQueueAdmin(admin.ModelAdmin):
                        'created_at', 'reprocessed_at', 'notification_sent') # عدلنا شوية
 
     actions = ['reprocess_selected_tasks', 'send_notifications_for_selected_tasks']
+
+    # # استخدام قوالب مخصصة للتحديث التلقائي
+    # change_list_template = 'admin/jobs/deadletterqueue/change_list.html'
+    # change_form_template = 'admin/jobs/deadletterqueue/change_form.html'
 
     fieldsets = (
         # معلومات أساسية

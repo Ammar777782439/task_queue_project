@@ -38,14 +38,14 @@ class JobTask(Task):
             return countdown
         except Job.DoesNotExist:
             # لو ما لقينا المهمة، نرجع قيمة افتراضية (مثلاً 5 ثواني)
-            logger.warning(f"المهمة رقم {job_id} مش موجودة لما جينا نحسب وقت الانتظار.")
+            logger.warning(f" the task {job_id} not found in the database.")
             return 5
 
     # هاذي الداله يستدعيها السلري اذ فشلت المهمه بعد كل المحاولات
     def on_failure(self, exc, task_id, args, kwargs, einfo):
 
         """تتعامل مع فشل المهمة بعد ما استنفذت كل محاولات الإعادة."""
-        # نأخذ الـ ID حق المهمة من الوسائط (arguments)
+       
         job_id = args[0] if args else None
         if job_id:
             try:
@@ -63,21 +63,21 @@ class JobTask(Task):
                 job.save(update_fields=['status', 'error_message', 'last_attempt_time', 'permanently_failed'])
 
                 # نسجل تحذير خطير (critical) في اللوج
-                logger.critical(f"تنبيه: المهمة {job_id} ({job.task_name}) فشلت بشكل نهائي بعد كل المحاولات. الخطأ: {einfo}")
+                logger.critical(f"Task  {job_id} ({job.task_name})  failed permanently after several attempts: {einfo}")
 
                 # نرسل المهمة الفاشلة لقائمة المهام الميتة (Dead Letter Queue)
 
                 send_to_dead_letter_queue.delay(job_id, str(exc), str(einfo))
 
 
-                # دالة on_failure تشتغل بس بعد ما تخلص كل المحاولات
+               
 
             except Job.DoesNotExist:
-                # Log error if job not found
+                
                 logger.error(f"Job {job_id} not found during final failure handling.")
                 logger.critical(f"ALERT: Job {job_id} record not found during final failure handling. Error: {einfo}")
             except Exception as e:
-                # Log any other errors during failure handling
+                
                 logger.error(f"Error during final failure handling for job {job_id}: {e}")
 
 
@@ -135,13 +135,13 @@ def process_job_task(self, job_id, sleep_time=10):
         sleep_time: كم ثواني ترقد المهمة عشان نمثل إنها بتشتغل (الافتراضي 10 ثواني).
     """
     # نسجل في اللوج إن المهمة بدأت
-    logger.info(f"المهمة {self.request.id} بدأت بالـ job_id={job_id} و sleep_time={sleep_time}")
+    logger.info(f"the task {self.request.id} with job_id= {job_id} and sleep_time={sleep_time}")
 
     try:
         # ندور على المهمة بالـ ID حقها
         job = Job.objects.get(pk=job_id)
         # نسجل معلومات عن المهمة اللي بدأت
-        logger.info(f"بدأنا المهمة {job_id} ({job.task_name}) بأولوية {job.priority}")
+        logger.info(f"the task {job_id} ({job.task_name}) with priority  {job.priority}")
 
         # --- تسجيل وقت البدء (فقط في المحاولة الأولى) ---
         first_attempt = self.request.retries == 0
@@ -174,7 +174,7 @@ def process_job_task(self, job_id, sleep_time=10):
         # هاذا كود لمنطق معالجه الفشل يعني المنطق اليه الفشل معلق عليه 
         import random
         if random.random() < 0.6: # احتمال 60% إنها تفشل
-            raise ValueError(f"خطأ محاكاة للمهمة {job_id}")
+            raise ValueError(f"Simulation error for the task {job_id}")
 
         # --- المهمة اكتملت ---
         job.status = 'completed'

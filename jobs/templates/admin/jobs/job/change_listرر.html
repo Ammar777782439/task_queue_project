@@ -1,0 +1,138 @@
+{% comment %} {% extends "admin/change_list.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    /* أنماط CSS للمؤشر والزر */
+    .auto-refresh-controls {
+        margin: 10px 0;
+        padding: 10px;
+        background-color: #f8f8f8;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+    }
+    .refresh-indicator {
+        display: inline-block;
+        margin-right: 10px;
+        font-weight: bold;
+    }
+    .refresh-countdown {
+        color: #007bff;
+        font-weight: bold;
+    }
+    .refresh-toggle-btn {
+        background-color: #28a745;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-right: 10px;
+    }
+    .refresh-toggle-btn.paused {
+        background-color: #dc3545;
+    }
+    .refresh-now-btn {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .interval-selector {
+        margin: 0 10px;
+    }
+</style>
+
+<script type="text/javascript">
+    document.addEventListener('DOMContentLoaded', function() {
+        // إضافة عناصر التحكم بالتحديث التلقائي
+        var resultsContainer = document.querySelector('.results');
+        if (resultsContainer) {
+            // إنشاء عنصر التحكم
+            var controlsDiv = document.createElement('div');
+            controlsDiv.className = 'auto-refresh-controls';
+            controlsDiv.innerHTML = `
+                <div class="refresh-indicator">
+                    التحديث التلقائي: <span class="refresh-countdown">10</span> ثوانٍ
+                </div>
+                <button class="refresh-toggle-btn">إيقاف التحديث</button>
+                <div class="interval-selector">
+                    الفاصل الزمني:
+                    <select id="refresh-interval">
+                        <option value="5000">5 ثوانٍ</option>
+                        <option value="10000" selected>10 ثوانٍ</option>
+                        <option value="30000">30 ثانية</option>
+                        <option value="60000">1 دقيقة</option>
+                    </select>
+                </div>
+                <button class="refresh-now-btn">تحديث الآن</button>
+            `;
+
+            // إضافة عنصر التحكم قبل نتائج البحث
+            resultsContainer.parentNode.insertBefore(controlsDiv, resultsContainer);
+
+            // المتغيرات والعناصر
+            var countdownEl = document.querySelector('.refresh-countdown');
+            var toggleBtn = document.querySelector('.refresh-toggle-btn');
+            var refreshNowBtn = document.querySelector('.refresh-now-btn');
+            var intervalSelect = document.getElementById('refresh-interval');
+            var refreshInterval = 10000; // الافتراضي 10 ثوانٍ
+            var countdown = 10;
+            var timer = null;
+            var isRefreshing = true;
+
+            // وظيفة العد التنازلي والتحديث
+            function startCountdown() {
+                if (timer) clearInterval(timer);
+                countdown = refreshInterval / 1000;
+                countdownEl.textContent = countdown;
+
+                timer = setInterval(function() {
+                    countdown--;
+                    countdownEl.textContent = countdown;
+
+                    if (countdown <= 0) {
+                        location.reload();
+                    }
+                }, 1000);
+            }
+
+            // بدء العد التنازلي الأولي
+            startCountdown();
+
+            // معالج نقر زر التبديل
+            toggleBtn.addEventListener('click', function() {
+                if (isRefreshing) {
+                    clearInterval(timer);
+                    isRefreshing = false;
+                    toggleBtn.textContent = 'تشغيل التحديث';
+                    toggleBtn.classList.add('paused');
+                } else {
+                    isRefreshing = true;
+                    startCountdown();
+                    toggleBtn.textContent = 'إيقاف التحديث';
+                    toggleBtn.classList.remove('paused');
+                }
+            });
+
+            // معالج نقر زر التحديث الآن
+            refreshNowBtn.addEventListener('click', function() {
+                location.reload();
+            });
+
+            // معالج تغيير الفاصل الزمني
+            intervalSelect.addEventListener('change', function() {
+                refreshInterval = parseInt(this.value);
+                if (isRefreshing) {
+                    startCountdown();
+                }
+            });
+        }
+    });
+</script>
+{% endblock %} {% endcomment %}
