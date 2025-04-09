@@ -177,17 +177,16 @@ CELERY_TASK_CREATE_MISSING_QUEUES = True
 # الباكند اللي بيستخدمه جانغو لإرسال الإيميلات
 # هنا بنستخدم console.EmailBackend، وهذا بيطبع الإيميلات في الكونسول بدل ما يرسلها فعلاً (مناسب للتطوير)
 # في البيئة الحقيقية، لازم نغيره لإعدادات سيرفر SMTP حقيقي
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.example.com'
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# EMAIL_HOST_USER = 'user@example.com'
-# EMAIL_HOST_PASSWORD = 'password'
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# الإيميل الافتراضي اللي بتظهر الرسائل إنها مرسلة منه
-DEFAULT_FROM_EMAIL = 'noreply@example.com'
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # استبدل هذا بخادم SMTP الخاص بك
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'ammarragha@gmail.com'
+EMAIL_HOST_PASSWORD = 'dbhv ajjh lphb gcrh'
+DEFAULT_FROM_EMAIL = 'نظام تنفيذ المهام <ammarragha@gmail.com>'
 
 # قائمة بإيميلات المدراء اللي بنرسل لهم إشعارات لما مهمة تفشل فشل نهائي
 # حط إيميلك هنا عشان توصلك الإشعارات
-ADMIN_EMAILS = ['ammarragha@gmail.com']
+ADMIN_EMAILS = ['nnohh4495@gmail.com']

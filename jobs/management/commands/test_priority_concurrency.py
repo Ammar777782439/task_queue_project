@@ -9,13 +9,13 @@ import random
 logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
-    help = 'أختبر الأولوية والتزامن بإنشاء مهام بأولويات مختلفة'
+    help = 'Test priority and concurrency by creating jobs with different priorities'
 
     def add_arguments(self, parser):
         # هنا أضيف خيارات للأمر لما أشغله من الكوماند لاين
-        parser.add_argument('--count', type=int, default=10, help='كم عدد المهام التجريبية اللي تريد تنشئها')
-        parser.add_argument('--sleep', type=int, default=10, help='كم ثانية كل مهمة بتأخذ وقتها للنوم')
-        parser.add_argument('--clear', action='store_true', help='لو تبي تمسح المهام السابقة قبل تنشئ مهام جديدة')
+        parser.add_argument('--count', type=int, default=10, help='Number of test jobs to create')
+        parser.add_argument('--sleep', type=int, default=10, help='Sleep time in seconds for each job')
+        parser.add_argument('--clear', action='store_true', help='Clear previous jobs before creating new ones')
 
     def handle(self, *args, **options):
         count = options['count']
@@ -25,7 +25,7 @@ class Command(BaseCommand):
         # لو اخترت خيار --clear نمسح المهام اللي موجودة قبل
         if clear:
             deleted_count = Job.objects.all().delete()[0]
-            self.stdout.write(f"تم مسح {deleted_count} مهمة كانت موجودة")
+            self.stdout.write(f"Cleared {deleted_count} existing jobs.")
 
         # هنا بأجهز لستة أولويات عشان أعطي لكل مهمة أولويتها
         priorities = []
@@ -40,7 +40,7 @@ class Command(BaseCommand):
         # بأخلط الأولويات عشان ما تكون بنفس الترتيب أثناء الإنشاء
         random.shuffle(priorities)
 
-        self.stdout.write(f"بأنشئ {count} مهمة تجريبية بأولويات مختلفة...")
+        self.stdout.write(f"Creating {count} test jobs with different priorities...")
 
         # هنا بننشئ المهام ونحفظهم في لستة jobs
         jobs = []
@@ -53,12 +53,12 @@ class Command(BaseCommand):
                 status='pending'
             )
             jobs.append(job)
-            self.stdout.write(f"تم إنشاء المهمة {job.id}: {job.task_name}")
+            self.stdout.write(f"Created job {job.id}: {job.task_name}")
 
-        self.stdout.write(f"أنشأت {len(jobs)} مهام بأولويات مختلفة")
+        self.stdout.write(f"{len(jobs)} jobs created with different priorities.")
 
         # الحين بنصف كل المهام في الطابور مرة وحدة
-        self.stdout.write("باصف كل المهام في الطابور بنفس الوقت...")
+        self.stdout.write("Queueing all jobs at once...")
         # بأحسب أعلى أولوية موجودة من بين كل المهام اللي أنشأتها
         max_priority = max(priorities)
 
@@ -76,13 +76,13 @@ class Command(BaseCommand):
                 countdown=countdown
             )
 
-            self.stdout.write(f"تمت إضافة المهمة {job.id} بأولوية {job.priority} (عد تنازلي: {countdown:.2f} ثانية)")
+            self.stdout.write(f"Queued job {job.id} with priority {job.priority} (countdown: {countdown:.2f} seconds)")
 
-        self.stdout.write(self.style.SUCCESS(f"تمت إضافة كل {count} مهمة في الطابور"))
-        self.stdout.write("السلوك المتوقع:")
-        self.stdout.write("1. المهام بأولوية عالية (10) تبدأ أول")
-        self.stdout.write("2. بعدها المهام بأولوية متوسطة (5)")
-        self.stdout.write("3. وبالأخير المهام بأولوية منخفضة (0)")
-        self.stdout.write(f"4. وشوف بنفسك، ممكن تشتغل حتى 4 مهام بنفس الوقت (حسب إعدادات التزامن)")
-        self.stdout.write("\nتابع لوق العمال وشوف حالة المهام في لوحة الإدارة")
-        self.stdout.write("رابط لوحة الإدارة: /admin/jobs/job/")
+        self.stdout.write(self.style.SUCCESS(f"All {count} jobs have been queued successfully."))
+        self.stdout.write("Expected behavior:")
+        self.stdout.write("1. High priority jobs (10) start first.")
+        self.stdout.write("2. Then medium priority jobs (5).")
+        self.stdout.write("3. Finally, low priority jobs (0).")
+        self.stdout.write("4. Observe up to 4 jobs running concurrently (depending on concurrency settings).")
+        self.stdout.write("\nCheck worker logs and monitor job statuses in the admin panel.")
+        self.stdout.write("Admin panel URL: /admin/jobs/job/")
