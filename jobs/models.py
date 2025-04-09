@@ -47,6 +47,14 @@ class Job(models.Model):
     # علامة (صح/خطأ) عشان نعرف إذا المهمة فشلت فشل نهائي بعد كل المحاولات (الافتراضي خطأ)
     permanently_failed = models.BooleanField(default=False, help_text="يشير إلى ما إذا كانت المهمة قد فشلت نهائيًا بعد كل المحاولات.")
 
+    # --- حقول تتبع وقت التنفيذ ---
+    # متى بدأ العامل بتنفيذ المهمة لأول مرة (تاريخ ووقت)
+    started_at = models.DateTimeField(null=True, blank=True, help_text="وقت بدء تنفيذ المهمة الفعلي.")
+    # متى اكتملت المهمة بنجاح (تاريخ ووقت)
+    completed_at = models.DateTimeField(null=True, blank=True, help_text="وقت اكتمال المهمة بنجاح.")
+    # المدة المستغرقة لتنفيذ المهمة (الفرق بين الانتهاء والبدء)
+    execution_duration = models.DurationField(null=True, blank=True, help_text="المدة المستغرقة لتنفيذ المهمة (من البدء إلى الاكتمال).")
+
     # هذي الدالة تحدد كيف يظهر اسم المهمة لما نطبعها أو نشوفها في لوحة التحكم
     def __str__(self):
         # بنرجع اسم المهمة وحالتها

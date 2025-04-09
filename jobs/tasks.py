@@ -143,6 +143,11 @@ def process_job_task(self, job_id, sleep_time=10):
         # نسجل معلومات عن المهمة اللي بدأت
         logger.info(f"بدأنا المهمة {job_id} ({job.task_name}) بأولوية {job.priority}")
 
+        # --- تسجيل وقت البدء (فقط في المحاولة الأولى) ---
+        first_attempt = self.request.retries == 0
+        if job.status == 'pending' and first_attempt and not job.started_at: # تأكد من أنه لم يتم تسجيله من قبل
+            job.started_at = timezone.now() # <-- تسجيل وقت البدء
+
         # نحدث حالة المهمة لـ 'قيد التنفيذ' بس لو كانت 'معلقة' أو 'فشلت' (عشان إعادة المحاولة)
         if job.status in ['pending', 'failed']:
              job.status = 'in_progress'
@@ -150,8 +155,11 @@ def process_job_task(self, job_id, sleep_time=10):
              job.last_attempt_time = timezone.now()
              # نحدث عدد مرات الإعادة عند البدء أو الإعادة
              job.retry_count = self.request.retries
-             # نحفظ التغييرات (status, last_attempt_time, retry_count)
-             job.save(update_fields=['status', 'last_attempt_time', 'retry_count'])
+             # --- حفظ وقت البدء مع التحديثات الأخرى ---
+             update_fields = ['status', 'last_attempt_time', 'retry_count']
+             if job.started_at and first_attempt: # تأكد من حفظ started_at إذا تم تعيينه في هذه المحاولة
+                 update_fields.append('started_at')
+             job.save(update_fields=update_fields)
 
         # --- هانا نمثل الشغل حق المهمة ---
 
@@ -169,16 +177,21 @@ def process_job_task(self, job_id, sleep_time=10):
         #     raise ValueError(f"خطأ محاكاة للمهمة {job_id}")
 
         # --- المهمة اكتملت ---
-       
         job.status = 'completed'
-       
         job.error_message = None
-       
-        job.save(update_fields=['status', 'error_message'])
-       
-        logger.info(f"The task {job_id} ({job.task_name}) completed successfully.")
-        
-        return f" The task {job_id} ({job.task_name}) completed successfully."
+        # --- تسجيل وقت الانتهاء وحساب المدة ---
+        job.completed_at = timezone.now() # <-- تسجيل وقت الانتهاء
+        if job.started_at: # تأكد من وجود وقت بدء لحساب المدة
+            job.execution_duration = job.completed_at - job.started_at # <-- حساب المدة
+        # --- حفظ وقت الانتهاء والمدة مع التحديثات الأخرى ---
+        update_fields = ['status', 'error_message', 'completed_at']
+        if job.execution_duration: # تأكد من حفظ المدة إذا تم حسابها
+            update_fields.append('execution_duration')
+        job.save(update_fields=update_fields)
+
+        logger.info(f"The task {job_id} ({job.task_name}) completed successfully. Duration: {job.execution_duration}")
+
+        return f" The task {job_id} ({job.task_name}) completed successfully. Duration: {job.execution_duration}"
 
     except Job.DoesNotExist:
         
@@ -381,4 +394,4 @@ def test_failure_task(self, job_id):
     except Exception as exc:
        
         logger.error(f"Expected error during failure test task test_failure_task for job {job_id}: {exc}")
-        raise 
+        raise

@@ -1,25 +1,27 @@
-# -*- coding: utf-8 -*-
-# هانا نستدعي الحاجات اللي بنحتاجها
-import time # عشان لو حبينا نسوي تأخير أو شي
-from django.contrib import admin, messages # نستدعي الأدمن والرسائل عشان نعرضها للمستخدم في لوحة التحكم
-from .models import Job, DeadLetterQueue # نستدعي المودلز حقنا (الجداول حق قاعدة البيانات)
-from .tasks import process_job_task, reprocess_failed_task, test_failure_task  # هانا استدعينا المهام حق Celery اللي بنستخدمهن في الأكشنز تحت
-from django.utils import timezone  # استدعينا التوقيت عشان نضبط جدولة المهام لو حبينا
-from .tasks import send_failure_notification  # استدعاء مهمة إرسال الإشعارات حق الفشل
 
-# سجلنا موديل Job (جدول المهام) في لوحة التحكم عشان نقدر نشوفه ونتحكم فيه
+import time 
+from django.contrib import admin, messages 
+from django.db.models import Sum, F 
+from django.db.models.functions import Coalesce 
+import datetime 
+from .models import Job, DeadLetterQueue
+from .tasks import process_job_task, reprocess_failed_task, test_failure_task 
+from django.utils import timezone 
+from .tasks import send_failure_notification  
+
+# سجلنا الموديل في لوحه التخكم 
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
-    # هنا بنحدد الأعمدة اللي بتظهر في القائمة الرئيسية للمهام في لوحة التحكم
-    list_display = ('id', 'task_name', 'status', 'permanently_failed', 'priority', 'retry_count', 'created_at', 'last_attempt_time')
+    #  بنحدد الأعمدة اللي بتظهر في القائمة الرئيسية للمهام في لوحة التحكم
+    list_display = ('id', 'task_name', 'status', 'permanently_failed', 'priority', 'retry_count', 'created_at', 'started_at', 'completed_at', 'execution_duration', 'last_attempt_time') # أضفنا حقول الوقت والمدة
     # هذي فلاتر عشان نقدر نصفي المهام بسرعة حسب حالتها أو أولويتها أو متى انضافت
     list_filter = ('status', 'permanently_failed', 'priority', 'created_at')
     # هذي الحقول اللي نقدر نبحث فيها عن مهمة معينة
     search_fields = ('id', 'task_name', 'status')
     # نرتب المهام بحيث الأحدث تظهر أول شي
     ordering = ('-created_at',)
-    # هذي الحقول ما نسمح للمستخدم يعدلها من لوحة التحكم، بس يشوفها
-    readonly_fields = ('status', 'retry_count', 'last_attempt_time', 'error_message', 'created_at', 'updated_at', 'permanently_failed')
+    # هذي الحقول اللي ما نسمح للمستخدم يعدلها من لوحة التحكم، بس يشوفها
+    readonly_fields = ('status', 'retry_count', 'last_attempt_time', 'error_message', 'created_at', 'updated_at', 'permanently_failed', 'started_at', 'completed_at', 'execution_duration') # أضفنا حقول الوقت والمدة
     # كم مهمة تظهر في كل صفحة من القائمة
     list_per_page = 25
     # هذي أكشنز (إجراءات) نقدر نسويها على مجموعة مهام نحددها من القائمة
@@ -33,10 +35,51 @@ class JobAdmin(admin.ModelAdmin):
         }),
         # القسم الثاني: معلومات عن حالة المهمة وتتبعها (نخليه مخفي افتراضياً عشان ما يزحم الشاشة)
         ('Status & Tracking', { # هذا عنوان القسم
-            'fields': ('status', 'permanently_failed', 'retry_count', 'last_attempt_time', 'error_message', 'created_at', 'updated_at'), # الحقول اللي بتظهر فيه
+            'fields': ('status', 'permanently_failed', 'retry_count', 'last_attempt_time', 'error_message', 'created_at', 'updated_at', 'started_at', 'completed_at', 'execution_duration'), # أضفنا حقول الوقت والمدة
             'classes': ('collapse',)  # هذا يخليه مخفي وينفتح بزر
         }),
     )
+
+    # --- تجاوز دالة عرض القائمة لحساب المجموع ---
+    def changelist_view(self, request, extra_context=None):
+        response = super().changelist_view(request, extra_context=extra_context)
+
+       
+        try:
+            qs = response.context_data['cl'].queryset
+        except (AttributeError, KeyError):
+           
+            return response
+
+        # فلترة المهام المكتملة التي لها مدة تنفيذ
+        completed_jobs_with_duration = qs.filter(status='completed', execution_duration__isnull=False)
+
+        # حساب مجموع مدد التنفيذ
+        # نستخدم Coalesce لضمان أن المجموع يكون timedelta(0) إذا لم تكن هناك مهام مطابقة بدلاً من None
+        total_duration_aggregate = completed_jobs_with_duration.aggregate(
+            total_duration=Coalesce(Sum('execution_duration'), datetime.timedelta(0))
+        )
+        total_duration = total_duration_aggregate['total_duration']
+
+        # --- عرض المجموع كرسالة للمستخدم ---
+       
+        total_seconds = int(total_duration.total_seconds())
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        duration_str = f"{hours} ساعة, {minutes} دقيقة, {seconds} ثانية"
+
+        # # عرض الرسالة في أعلى الصفحة
+        # self.message_user(
+        #     request,
+        #     f"إجمالي وقت التنفيذ للمهام المكتملة المعروضة: {duration_str}",
+        #     level=messages.INFO # مستوى الرسالة (معلومات)
+        # )
+        # # --- نهاية عرض الرسالة ---
+
+
+        return response
+   
+
 
     # هذا الأكشن (الإجراء) اللي سويناه عشان نعيد محاولة تنفيذ المهام اللي فشلت
     @admin.action(description='إعادة محاولة المهام الفاشلة المحددة (Retry selected failed jobs)') # هذا الوصف اللي بيظهر في القائمة
@@ -44,31 +87,30 @@ class JobAdmin(admin.ModelAdmin):
         """
         هذي الدالة تاخذ المهام اللي حددها المستخدم (queryset) وتعيد جدولتها لو كانت فاشلة.
         """
-        retried_count = 0 # عداد للمهام اللي أعدنا جدولتها
-        skipped_count = 0 # عداد للمهام اللي تخطيناها (لأنها مش فاشلة)
-        # نلف على كل مهمة حددها المستخدم
+        retried_count = 0 
+        skipped_count = 0
+       
         for job in queryset:
-            # نتأكد إن المهمة حالتها 'failed' (فشلت)
+           
             if job.status == 'failed':
-                # بنرجع المهمة كأنها جديدة علشان نعيد معالجتها
-                job.status = 'pending' # نرجع حالتها 'معلقة'
-                job.retry_count = 0 # نصفر عداد المحاولات
-                job.error_message = None # نمسح رسالة الخطأ القديمة
-                job.last_attempt_time = None # نمسح وقت آخر محاولة
-                job.permanently_failed = False # نشيل علامة الفشل النهائي
-                # نحفظ التغييرات هذي بس في قاعدة البيانات
+                
+                job.status = 'pending'
+                job.retry_count = 0 
+                job.error_message = None 
+                job.last_attempt_time = None 
+                job.permanently_failed = False 
+                
                 job.save(update_fields=['status', 'retry_count', 'error_message', 'last_attempt_time', 'permanently_failed'])
 
-                # نجهز بيانات المهمة عشان نرسلها لـ Celery مرة ثانية
-                task_args = [job.id] # الوسيط الأساسي هو الـ ID حق المهمة
-                task_kwargs = {} # مافيش وسائط مفتاحية هنا
-                # نحسب وقت الانتظار قبل ما تبدأ المهمة، كلما زادت الأولوية قل الانتظار
-                # هانا سوينا معادلة بسيطة، ممكن نغيرها بعدين
+               
+                task_args = [job.id] 
+                task_kwargs = {} 
+               
                 countdown = max(0, 10 - job.priority)
 
-                # نجهز الخيارات حق Celery
+               
                 celery_options = {
-                    'priority': job.priority,  # نستخدم نفس الأولوية الأصلية
+                    'priority': job.priority,  
                     'retry_policy': { # سياسة إعادة المحاولة (هذي يمكن ما تشتغل مباشرة كذا، بس فكرة)
                         'max_retries': job.max_retries, # نستخدم نفس أقصى عدد محاولات
                     },
@@ -77,23 +119,23 @@ class JobAdmin(admin.ModelAdmin):
 
                 # لو كان للمهمة وقت مجدول في المستقبل، نستخدمه بدل الـ countdown
                 if job.scheduled_time and job.scheduled_time > timezone.now():
-                    celery_options['eta'] = job.scheduled_time # eta يعني الوقت المقدر للوصول (وقت التنفيذ)
+                    celery_options['eta'] = job.scheduled_time 
 
-                # نطلق المهمة (نرسلها للطابور حق Celery) باستخدام دالة process_job_task
+                
                 process_job_task.apply_async(
-                    args=task_args, # الوسائط العادية
-                    kwargs=task_kwargs, # الوسائط المفتاحية
-                    **celery_options # باقي الخيارات (الأولوية، وقت الانتظار/الجدولة)
+                    args=task_args, 
+                    kwargs=task_kwargs, 
+                    **celery_options #
                 )
-                retried_count += 1 # نزيد عداد المهام اللي أعدنا جدولتها
+                retried_count += 1 
             else:
-                # لو المهمة مش فاشلة، نتخطاها ونزيد العداد حق التخطي
+                
                 skipped_count += 1
 
         # بعد ما نخلص اللفة على كل المهام، نعرض رسالة للمستخدم في لوحة التحكم
-        if retried_count: # لو أعدنا جدولة أي مهمة
+        if retried_count: 
             self.message_user(request, f'تمت إعادة جدولة {retried_count} مهمة فاشلة بنجاح.', messages.SUCCESS) # رسالة نجاح
-        if skipped_count: # لو تخطينا أي مهمة
+        if skipped_count: 
             self.message_user(request, f'تم تخطي {skipped_count} مهمة لأنها ليست في حالة "فشل".', messages.WARNING) # رسالة تحذير
 
     # هذا الأكشن يحول المهام المكتملة إلى فاشلة، سويناه عشان نجرب أو لو حبينا نعيد معالجة مهمة خلصت
@@ -102,18 +144,19 @@ class JobAdmin(admin.ModelAdmin):
         """
         هذي الدالة تاخذ المهام المكتملة اللي حددها المستخدم وتخليها تفشل عن طريق استدعاء مهمة اختبار الفشل.
         """
-        count = 0 # عداد للمهام اللي حولناها لفاشلة
-        # نلف على المهام المحددة
+        count = 0
+       
         for job in queryset:
-            # نتأكد إن حالتها 'completed' (اكتملت)
+           
             if job.status == 'completed':
-                # هنا نستخدم مهمة test_failure_task اللي دايماً تفشل عشان نخلي المهمة الأصلية تفشل
+                
                 test_failure_task.apply_async(
-                    args=[job.id], # نرسل الـ ID حق المهمة الأصلية
-                    kwargs={}, # مافيش وسائط مفتاحية
-                    countdown=0 # تبدأ على طول
+                    args=[job.id],
+                    kwargs={},
+                    countdown=0
                 )
-                count += 1 # نزيد العداد
+                count += 1 
+
                 # ملاحظة: الكود الأصلي كان يغير الحالة مباشرة هنا، بس الأفضل نستخدم مهمة الفشل عشان نختبر مسار الفشل كامل
                 # job.status = 'failed'
                 # job.error_message = 'Marked as failed manually by admin action.'
@@ -130,18 +173,18 @@ class JobAdmin(admin.ModelAdmin):
 # سجلنا موديل DeadLetterQueue (جدول المهام الميتة) في لوحة التحكم
 @admin.register(DeadLetterQueue)
 class DeadLetterQueueAdmin(admin.ModelAdmin):
-    # الأعمدة اللي بتظهر في القائمة
+   
     list_display = ('id', 'task_name', 'original_job_link', 'created_at', 'reprocessed', 'notification_sent') # أضفنا رابط للمهمة الأصلية
-    # فلاتر
+   
     list_filter = ('reprocessed', 'notification_sent', 'created_at')
-    # حقول البحث
+    
     search_fields = ('task_name', 'task_id', 'error_message', 'original_job__id', 'original_job__task_name') # أضفنا البحث في المهمة الأصلية
-    # الحقول اللي للقراءة فقط
+    
     readonly_fields = ('original_job_link', 'task_id', 'task_name', 'error_message', 'traceback_formatted', 'args', 'kwargs',
                        'created_at', 'reprocessed_at', 'notification_sent') # عدلنا شوية
-    # الأكشنز المتاحة لهذا الموديل
+    
     actions = ['reprocess_selected_tasks', 'send_notifications_for_selected_tasks']
-    # ترتيب الحقول في صفحة التفاصيل/التعديل
+   
     fieldsets = (
         # معلومات أساسية
         (None, {
