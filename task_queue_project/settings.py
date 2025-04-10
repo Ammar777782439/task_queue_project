@@ -149,6 +149,24 @@ CELERY_RESULT_BACKEND = 'redis://localhost:16379/0'
 # اسم الطابور (Queue) الافتراضي اللي بتروح له المهام لو ما حددنا طابور ثاني
 CELERY_TASK_DEFAULT_QUEUE = 'default'
 
+# --- إعدادات Kafka ---
+
+# عنوان خادم Kafka
+KAFKA_BOOTSTRAP_SERVERS = '192.168.117.128:9094'
+
+# اسم الموضوع (Topic) للرسائل الناجحة
+KAFKA_SUCCESS_TOPIC = 'task-success'
+
+# إعدادات Kafka
+KAFKA_CONFIG = {
+    'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS,
+    'client.id': 'task-queue-producer',
+    'socket.timeout.ms': 10000,  # زيادة مهلة الاتصال
+    'request.timeout.ms': 20000,  # زيادة مهلة الطلب
+    'message.timeout.ms': 30000,  # زيادة مهلة الرسالة
+    'acks': 'all'  # انتظار تأكيد من جميع النسخ المتماثلة
+}
+
 # --- إعدادات التحكم في التزامن (Concurrency) للعمال (Workers) ---
 
 # كم مهمة يقدر العامل (worker) الواحد ينفذها بنفس الوقت (تزامنيًا)
@@ -161,32 +179,75 @@ CELERY_WORKER_CONCURRENCY = 4
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 
 # متى العامل يرسل تأكيد (acknowledgment) للوسيط إنه استلم المهمة؟
-# لما تكون True، العامل ما يرسل التأكيد إلا بعد ما ينفذ المهمة بنجاح (أو تفشل نهائياً)
+# لما تكون True، العامل ما يرسل التأكيد إلا بعد ما ينفذ المهمة بنجاح (أو تفشل نهائ
 # هذا يضمن إنه لو العامل مات فجأة وسط تنفيذ مهمة، المهمة هذي ما تضيع وترجع للطابور عشان عامل ثاني ينفذها
 # لو كانت False (الافتراضي)، العامل يرسل التأكيد أول ما يستلم المهمة، فلو مات وسط التنفيذ، المهمة بتضيع
 CELERY_TASK_ACKS_LATE = True
 
 # --- إعدادات Celery إضافية ---
 
-# هل Celery ينشئ الطوابير تلقائياً لو ما كانت موجودة؟ (نعم)
-CELERY_TASK_CREATE_MISSING_QUEUES = True
-
-
-# --- إعدادات الإيميل لإشعارات الفشل ---
-
-# الباكند اللي بيستخدمه جانغو لإرسال الإيميلات
+# هل Celery ينشئ الطوابير تلقائ
 # هنا بنستخدم console.EmailBackend، وهذا بيطبع الإيميلات في الكونسول بدل ما يرسلها فعلاً (مناسب للتطوير)
 # في البيئة الحقيقية، لازم نغيره لإعدادات سيرفر SMTP حقيقي
 
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'  # استبدل هذا بخادم SMTP الخاص بك
+EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'ammarragha@gmail.com'
+
+# --- إعدادات التسجيل (Logging) ---
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': 'kafka_debug.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'jobs.kafka_utils': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'jobs.tasks': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}
 EMAIL_HOST_PASSWORD = 'dbhv ajjh lphb gcrh'
 DEFAULT_FROM_EMAIL = 'نظام تنفيذ المهام <ammarragha@gmail.com>'
 
-# قائمة بإيميلات المدراء اللي بنرسل لهم إشعارات لما مهمة تفشل فشل نهائي
-# حط إيميلك هنا عشان توصلك الإشعارات
+
 ADMIN_EMAILS = ['nnohh4495@gmail.com']
+
+# Kafka Configuration
+KAFKA_BOOTSTRAP_SERVERS = '192.168.117.128:9094'
+KAFKA_SUCCESS_TOPIC = 'task-success'
+KAFKA_CONFIG = {
+    'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS,
+    'client.id': 'task-queue-producer',
+    'socket.timeout.ms': 10000,  # زيادة مهلة الاتصال
+    'request.timeout.ms': 20000,  # زيادة مهلة الطلب
+    'message.timeout.ms': 30000,  # زيادة مهلة الرسالة
+    'acks': 'all'  # انتظار تأكيد من جميع النسخ المتماثلة
+}

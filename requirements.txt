@@ -8,6 +8,8 @@ kombu>=5.0,<6.0  # Messaging library used by Celery
 
 # PostgreSQL Database Adapter
 psycopg2-binary>=2.9,<3.0
+# Kafka Integration
+confluent-kafka>=1.8.0
 
 # Optional: For loading environment variables (good practice)
 # python-dotenv>=0.19,<1.0
